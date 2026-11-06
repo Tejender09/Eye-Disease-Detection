@@ -1,0 +1,16 @@
+label,split,image_count
+cataract,test,81
+cataract,train,379
+cataract,val,81
+conjunctivitis,test,54
+conjunctivitis,train,250
+conjunctivitis,val,53
+eyelid,test,78
+eyelid,train,362
+eyelid,val,78
+normal,test,13
+normal,train,63
+normal,val,14
+uveitis,test,33
+uveitis,train,153
+uveitis,val,33

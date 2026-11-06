@@ -1,0 +1,15 @@
+# Python
+venv/
+__pycache__/
+*.pyc
+
+# Original datasets
+datasets/raw/
+datasets/processed/
+
+# Downloaded dataset
+Image Dataset on Eye Diseases/
+Image Dataset on Eye Diseases .zip
+
+# Jupyter
+.ipynb_checkpoints/
