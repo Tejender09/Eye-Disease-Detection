@@ -1,0 +1,4 @@
+image_1,class_1,image_2,class_2,hamming_distance,hash_similarity_percent,pair_type,manual_review_status,review_decision,review_notes
+datasets\raw\external_eye\Cataract\229.jpg,Cataract,datasets\raw\external_eye\Normal\359.jpg,Normal,5,92.19,Cross Class,Pending,,
+datasets\raw\external_eye\Normal\496.jpg,Normal,datasets\raw\external_eye\Normal\570.jpg,Normal,5,92.19,Same Class,Pending,,
+datasets\raw\external_eye\Normal\530.jpg,Normal,datasets\raw\external_eye\Normal\63.jpg,Normal,5,92.19,Same Class,Pending,,

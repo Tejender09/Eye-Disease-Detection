@@ -15,3 +15,26 @@ Image Dataset on Eye Diseases .zip
 
 # Jupyter
 .ipynb_checkpoints/
+# Virtual environment
+.venv/
+venv/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Model checkpoints
+*.pth
+*.pt
+
+# Dataset files
+datasets/raw/
+datasets/processed/
+datasets/final/
+datasets/temporary_final/
+
+# Compressed datasets
+*.zip
+
+# Environment variables
+.env

@@ -1,0 +1,4 @@
+image_1,class_1,image_2,class_2,hamming_distance,hash_similarity_percent,pair_type,manual_review_status,review_decision,review_notes
+datasets\raw\external_eye\Conjunctivitis\617.png,Conjunctivitis,datasets\raw\external_eye\Uveitis\203.jpeg,Uveitis,3,95.31,Cross Class,Pending,,
+datasets\raw\external_eye\Conjunctivitis\680.png,Conjunctivitis,datasets\raw\external_eye\Eyelid\204.jpeg,Eyelid,5,92.19,Cross Class,Pending,,
+datasets\raw\external_eye\Conjunctivitis\aug_832.jpg,Conjunctivitis,datasets\raw\external_eye\Uveitis\13.jpeg,Uveitis,5,92.19,Cross Class,Pending,,

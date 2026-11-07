@@ -1,0 +1,6 @@
+label,train,val,test,total
+cataract,379,81,81,541
+conjunctivitis,250,54,53,357
+eyelid,363,78,77,518
+normal,63,13,14,90
+uveitis,153,33,33,219
