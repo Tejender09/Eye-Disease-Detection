@@ -5,7 +5,9 @@ __pycache__/
 
 # Original datasets
 datasets/raw/
-datasets/processed/
+
+# Processed dataset
+# Allow processed images to be tracked by Git
 
 # Downloaded dataset
 Image Dataset on Eye Diseases/
