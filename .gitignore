@@ -13,3 +13,15 @@ Image Dataset on Eye Diseases .zip
 
 # Jupyter
 .ipynb_checkpoints/
+
+.venv/
+venv/
+__pycache__/
+*.pyc
+
+datasets/
+*.pth
+*.pt
+*.zip
+
+.env
