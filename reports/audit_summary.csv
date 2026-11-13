@@ -1,8 +1,10 @@
 Metric,Value
 Target Resolution,224x224
 Split Ratio (Train/Val/Test),70% / 15% / 15%
-Total Processed Images,14735
-Train Images,10314
-Validation Images,2212
-Test Images,2209
+Total Raw Images,14664
+Filtered Cross-Class Conflicts,456
+Total Clean Processed Images,14208
+Train Images,9943
+Validation Images,2131
+Test Images,2134
 Data Leakage Between Splits,0

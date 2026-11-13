@@ -4,6 +4,7 @@ from pathlib import Path
 import random
 import shutil
 from PIL import Image, ImageOps
+from collections import defaultdict
 
 # ---------------- CONFIGURATION ----------------
 
@@ -20,6 +21,7 @@ MIN_WIDTH = 64
 MIN_HEIGHT = 64
 RANDOM_SEED = 42
 DEDUPLICATE_BEFORE_SPLIT = True
+FILTER_CROSS_CLASS_CONFLICTS = True
 
 # 70% Train, 15% Validation, 15% Test
 SPLIT_RATIOS = {
@@ -37,6 +39,17 @@ def clean_path(p):
     if s.startswith("\\\\?\\"):
         return s[4:]
     return s
+
+def compute_dhash(img, hash_size=8):
+    """Compute difference hash (dhash) for perceptual similarity comparison."""
+    resized = img.convert("L").resize((hash_size + 1, hash_size), Image.Resampling.BOX)
+    pixels = list(resized.getdata())
+    diff = []
+    for row in range(hash_size):
+        row_start = row * (hash_size + 1)
+        for col in range(hash_size):
+            diff.append(pixels[row_start + col] > pixels[row_start + col + 1])
+    return sum([2 ** i for i, v in enumerate(diff) if v])
 
 # ---------------- BACKUP UTILITY ----------------
 
@@ -65,6 +78,7 @@ def audit_raw_dataset(classes):
     print("\n========== RAW DATASET AUDIT ==========\n")
     records = []
     hash_map = {}
+    dhash_map = defaultdict(lambda: defaultdict(list))
     corrupted = []
     low_resolution = []
 
@@ -85,17 +99,22 @@ def audit_raw_dataset(classes):
                     width, height = img.size
                     file_bytes = file_path.read_bytes()
                     file_hash = hashlib.sha256(file_bytes).hexdigest()
+                    p_hash = compute_dhash(img)
 
                     record = {
                         "path": file_path,
                         "class": class_name,
                         "width": width,
                         "height": height,
-                        "hash": file_hash
+                        "hash": file_hash,
+                        "dhash": p_hash,
+                        "is_cross_conflict": False,
+                        "conflict_classes": []
                     }
 
                     records.append(record)
                     hash_map.setdefault(file_hash, []).append(str(file_path))
+                    dhash_map[p_hash][class_name].append(record)
 
                     if width < MIN_WIDTH or height < MIN_HEIGHT:
                         low_resolution.append(record)
@@ -106,11 +125,35 @@ def audit_raw_dataset(classes):
                     "error": str(error)
                 })
 
-    # Duplicates report
+    # Exact byte duplicate groups
     duplicate_groups = {h: paths for h, paths in hash_map.items() if len(paths) > 1}
+
+    # Cross-class perceptual duplicate detection
+    cross_class_conflicts = []
+    for p_hash, class_records_dict in dhash_map.items():
+        if len(class_records_dict) > 1:
+            all_conflicted_classes = sorted(class_records_dict.keys())
+            for c_name, rec_list in class_records_dict.items():
+                for rec in rec_list:
+                    rec["is_cross_conflict"] = True
+                    rec["conflict_classes"] = all_conflicted_classes
+                    cross_class_conflicts.append(rec)
 
     REPORT_DIR.mkdir(parents=True, exist_ok=True)
 
+    # Cross-class conflicts report
+    with open(REPORT_DIR / "cross_class_conflicts.csv", "w", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        writer.writerow(["Perceptual Hash", "Assigned Class", "Conflicting Classes", "File Path"])
+        for rec in cross_class_conflicts:
+            writer.writerow([
+                hex(rec["dhash"]),
+                rec["class"],
+                " & ".join(rec["conflict_classes"]),
+                clean_path(rec["path"])
+            ])
+
+    # Exact Duplicates report
     with open(REPORT_DIR / "exact_duplicates.csv", "w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
         writer.writerow(["SHA256", "File Paths"])
@@ -143,8 +186,9 @@ def audit_raw_dataset(classes):
     print(f" - Corrupted images: {len(corrupted)}")
     print(f" - Low-resolution images (<{MIN_WIDTH}x{MIN_HEIGHT}): {len(low_resolution)}")
     print(f" - Exact duplicate groups: {len(duplicate_groups)}")
+    print(f" - Cross-class conflicted images: {len(cross_class_conflicts)}")
 
-    return records, corrupted, duplicate_groups
+    return records, corrupted, duplicate_groups, cross_class_conflicts
 
 # ---------------- PREPROCESSING & SPLITTING (70 / 15 / 15) ----------------
 
@@ -163,15 +207,25 @@ def preprocess_and_split(records, classes):
                 except Exception:
                     pass
 
-    # Group valid records by class
+    # Filter out cross-class duplicates and intra-class exact duplicates
     class_to_records = {c: [] for c in classes}
     seen_hashes = set()
+    filtered_cross_count = 0
+
     for r in records:
+        if FILTER_CROSS_CLASS_CONFLICTS and r["is_cross_conflict"]:
+            filtered_cross_count += 1
+            continue
+
         if DEDUPLICATE_BEFORE_SPLIT:
             if r["hash"] in seen_hashes:
                 continue
             seen_hashes.add(r["hash"])
+
         class_to_records[r["class"]].append(r)
+
+    print(f"Excluded {filtered_cross_count} cross-class conflicting images.")
+    print(f"Remaining clean images for dataset: {sum(len(items) for items in class_to_records.values())}\n")
 
     split_counts = {split: {c: 0 for c in classes} for split in ["train", "val", "test"]}
     processed_records = []
@@ -229,15 +283,13 @@ def preprocess_and_split(records, classes):
                 except Exception as err:
                     print(f"Error processing {src_path}: {err}")
 
-    return split_counts, processed_records
+    return split_counts, processed_records, filtered_cross_count
 
 # ---------------- POST-PREPROCESSING AUDIT ----------------
 
-def audit_processed_dataset(classes, split_counts, processed_records):
+def audit_processed_dataset(classes, split_counts, processed_records, filtered_cross_count, total_raw):
     print("\n========== POST-PREPROCESSING AUDIT ==========\n")
-    audit_results = []
     hash_set_by_split = {"train": set(), "val": set(), "test": set()}
-    leakage_count = 0
 
     for split in ["train", "val", "test"]:
         total_split = 0
@@ -264,7 +316,7 @@ def audit_processed_dataset(classes, split_counts, processed_records):
     split_csv_path = REPORT_DIR / "split_distribution.csv"
     with open(split_csv_path, "w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
-        writer.writerow(["Class", "Train", "Val", "Test", "Total", "Train %", "Val %", "Test %"])
+        writer.writerow(["Class", "Train", "Val", "Test", "Total Clean", "Train %", "Val %", "Test %"])
         for c in classes:
             tr = split_counts["train"][c]
             va = split_counts["val"][c]
@@ -282,7 +334,9 @@ def audit_processed_dataset(classes, split_counts, processed_records):
         writer.writerow(["Metric", "Value"])
         writer.writerow(["Target Resolution", f"{IMAGE_SIZE[0]}x{IMAGE_SIZE[1]}"])
         writer.writerow(["Split Ratio (Train/Val/Test)", "70% / 15% / 15%"])
-        writer.writerow(["Total Processed Images", len(processed_records)])
+        writer.writerow(["Total Raw Images", total_raw])
+        writer.writerow(["Filtered Cross-Class Conflicts", filtered_cross_count])
+        writer.writerow(["Total Clean Processed Images", len(processed_records)])
         writer.writerow(["Train Images", sum(split_counts["train"].values())])
         writer.writerow(["Validation Images", sum(split_counts["val"].values())])
         writer.writerow(["Test Images", sum(split_counts["test"].values())])
@@ -302,9 +356,9 @@ def main():
     classes = discover_classes()
     print(f"Classes discovered: {classes}")
 
-    records, corrupted, duplicate_groups = audit_raw_dataset(classes)
-    split_counts, processed_records = preprocess_and_split(records, classes)
-    audit_processed_dataset(classes, split_counts, processed_records)
+    records, corrupted, duplicate_groups, cross_class_conflicts = audit_raw_dataset(classes)
+    split_counts, processed_records, filtered_count = preprocess_and_split(records, classes)
+    audit_processed_dataset(classes, split_counts, processed_records, filtered_count, len(records))
 
     print("\nPipeline finished successfully!")
 
