@@ -1,0 +1,21 @@
+Test Accuracy: 92.88%
+Macro F1: 0.9223
+
+                          precision    recall  f1-score   support
+
+ Allergic Conjunctivitis     0.8066    0.8143    0.8104       210
+Bacterial Conjunctivitis     0.9178    0.8874    0.9024       151
+             Blepharitis     0.9495    0.9673    0.9583       214
+                Cataract     0.9780    0.9407    0.9590       236
+                Glaucoma     0.7867    0.9219    0.8489        64
+                 Healthy     0.9668    0.9533    0.9600       214
+              Pinguecula     1.0000    1.0000    1.0000        55
+               Pterygium     0.9883    0.9845    0.9864       258
+                    Stye     0.9538    0.9880    0.9706       251
+                 Uveitis     0.8193    0.8718    0.8447        78
+    Viral Conjunctivitis     0.8529    0.8018    0.8266       217
+             Xanthelasma     1.0000    1.0000    1.0000       186
+
+                accuracy                         0.9288      2134
+               macro avg     0.9183    0.9276    0.9223      2134
+            weighted avg     0.9295    0.9288    0.9288      2134
