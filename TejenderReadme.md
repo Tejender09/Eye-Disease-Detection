@@ -107,60 +107,96 @@ drivers, and thermal or power limits.
 
 ## 6. How to Run
 
-From the project root:
+### Training Pipeline
+To train the baseline CNN from scratch on the processed dataset:
 
 ```bash
 python train_custom_cnn.py
 ```
 
 The script automatically:
+1. Loads the processed train, validation, and test splits (224×224 RGB).
+2. Computes inverse-frequency class weights for cross-entropy loss.
+3. Trains `EyeDiseaseCNN` for 25 epochs using AdamW + CosineAnnealingLR.
+4. Checkpoints the best model based on validation macro-F1 (`models/custom_cnn_best.pt`).
+5. Evaluates on the unseen test set (2,134 images), generating test reports and confusion matrices.
+6. Generates initial Grad-CAM samples for test classes.
 
-1. Loads the processed train, validation, and test folders.
-2. Discovers the class names.
-3. Computes class weights.
-4. Trains the CNN for 25 epochs.
-5. Saves the checkpoint with the best validation macro-F1.
-6. Evaluates the best checkpoint on the unseen test set.
-7. Generates reports, a confusion matrix, learning curves, and Grad-CAM
-   visualizations.
+### Standalone Grad-CAM Visualizer
+To generate or inspect Grad-CAM heatmaps without re-training:
 
-The console should show `cuda` as the selected device when the GPU is active.
+```bash
+# Generate sample heatmaps for all 12 classes
+python gradcam_custom_cnn.py
+
+# Explain a specific eye image
+python gradcam_custom_cnn.py --image "datasets/processed/test/Cataract/Cataract_00000.jpg"
+```
 
 ## 7. Generated Outputs
 
-| Output | Location |
+| Output | Location | Description |
+|---|---|---|
+| Best model checkpoint | `models/custom_cnn_best.pt` | Model weights with highest validation macro-F1 (Epoch 23) |
+| Training metrics | `reports/custom_cnn_training_metrics.csv` | Epoch-by-epoch loss, accuracy, and F1 records |
+| Learning curves | `reports/custom_cnn_learning_curves.png` | Train vs validation loss and accuracy curves |
+| Test report | `reports/custom_cnn_test_report.txt` | Complete test set classification report |
+| Confusion matrix | `reports/custom_cnn_confusion_matrix.png` | 12×12 normalized/raw test confusion matrix |
+| Grad-CAM samples | `reports/gradcam_samples/gradcam_custom_cnn_*.png` | Heatmaps and overlays for each disease category |
+
+## 8. Experimental Results
+
+The model was trained for 25 epochs on an NVIDIA CUDA-enabled GPU (~32s per epoch, total training time ~14 minutes). The optimal checkpoint was attained at **Epoch 23** with a validation macro-F1 of **0.7458**.
+
+### Overall Test Set Performance (2,134 Unseen Images)
+
+| Metric | Score |
 |---|---|
-| Best model checkpoint | `models/custom_cnn_best.pt` |
-| Training metrics | `reports/custom_cnn_training_metrics.csv` |
-| Learning curves | `reports/custom_cnn_learning_curves.png` |
-| Test report | `reports/custom_cnn_test_report.txt` |
-| Confusion matrix | `reports/custom_cnn_confusion_matrix.png` |
-| Grad-CAM samples | `reports/gradcam_samples/gradcam_custom_cnn_*.png` |
+| **Test Accuracy** | **75.54%** |
+| **Macro Precision** | **0.7431** |
+| **Macro Recall** | **0.7703** |
+| **Macro F1-Score** | **0.7511** |
+| **Weighted F1-Score** | **0.7567** |
 
-The checkpoint is selected using validation macro-F1 rather than training
-accuracy, which gives minority classes more influence during model selection.
+### Per-Class Performance Breakdown
 
-## 8. Evaluation Metrics
+| Disease Class | Precision | Recall | F1-Score | Support (Test Images) |
+|---|---|---|---|---|
+| **Pinguecula** | 0.9649 | 1.0000 | **0.9821** | 55 |
+| **Xanthelasma** | 0.9333 | 0.9785 | **0.9554** | 186 |
+| **Pterygium** | 0.9500 | 0.8837 | **0.9157** | 258 |
+| **Cataract** | 0.8610 | 0.8136 | **0.8366** | 236 |
+| **Healthy** | 0.8230 | 0.8037 | **0.8132** | 214 |
+| **Blepharitis** | 0.6936 | 0.7617 | **0.7261** | 214 |
+| **Bacterial Conjunctivitis** | 0.6894 | 0.7351 | **0.7115** | 151 |
+| **Glaucoma** | 0.5773 | 0.8750 | **0.6957** | 64 |
+| **Stye** | 0.7315 | 0.6295 | **0.6767** | 251 |
+| **Viral Conjunctivitis** | 0.6479 | 0.6359 | **0.6419** | 217 |
+| **Allergic Conjunctivitis** | 0.6471 | 0.5238 | **0.5789** | 210 |
+| **Uveitis** | 0.3983 | 0.6026 | **0.4796** | 78 |
 
-The test evaluation reports:
+### Comparative Analysis: Custom CNN vs. DenseNet121
 
-- Overall accuracy
-- Macro precision
-- Macro recall
-- Macro F1-score
-- Per-class precision, recall, and F1
-- Confusion matrix
+Both models were evaluated on the exact same 12-class test split (2,134 images):
 
-Final custom CNN scores will be added here after the first complete training
-run. Results should be compared with the existing MobileNetV3-Large and
-DenseNet121 models using the same processed test split and evaluation metrics.
+| Model | Pretrained Weights? | Parameters | Test Accuracy | Macro Precision | Macro Recall | Macro F1 |
+|---|---|---|---|---|---|---|
+| **EyeDiseaseCNN (Custom Baseline)** | **None (From Scratch)** | **983,052** | **75.54%** | **0.7431** | **0.7703** | **0.7511** |
+| DenseNet121 (Dev) | ImageNet-1k | 7,000,000+ | 92.88% | 0.9183 | 0.9276 | 0.9223 |
 
-## 9. Explainability
+**Key Takeaways**:
+1. **Strong Baseline Efficiency**: With under 1 million parameters (~14% the size of DenseNet121) and zero pretraining, `EyeDiseaseCNN` achieved over **75.5% test accuracy** and **0.7511 macro F1**.
+2. **High Precision on Structural Conditions**: Conditions with distinctive visual landmarks such as *Pinguecula* (0.9821 F1), *Xanthelasma* (0.9554 F1), *Pterygium* (0.9157 F1), and *Cataract* (0.8366 F1) were classified with very high accuracy.
+3. **Challenges with Redness / Conjunctival Overlap**: Similar to the transfer-learning models, differentiating between *Allergic*, *Viral*, and *Bacterial Conjunctivitis* remains the most ambiguous challenge due to subtle clinical symptom overlap in external eye photographs.
 
-Grad-CAM is generated from the final convolutional activation layer. The
-heatmaps show which image regions influenced each prediction and help check
-whether the model focuses on ocular features instead of irrelevant background
-regions.
+## 9. Explainability & Grad-CAM
 
-This project is for academic experimentation and is not a medical diagnostic
-system.
+Model interpretability is implemented via Gradient-weighted Class Activation Mapping (Grad-CAM):
+- **Target Layer**: The final 256-channel convolutional layer (`model.features[-3]`).
+- **Autograd Hook Safety**: Hook-safe implementation ensures non-destructive backward gradients across all activation layers.
+- **Visual Validation**: Inspection of generated heatmaps in `reports/gradcam_samples/` confirms that the network focuses on physiological landmarks:
+  - Cataract: Concentrated activation on the pupil and clouded lens.
+  - Xanthelasma & Blepharitis: Activation focused directly on eyelid margins and lipid plaques.
+  - Pterygium & Pinguecula: Sclera and corneal boundaries.
+
+This project is for academic research and educational experimentation and is not a clinical medical diagnostic system.
