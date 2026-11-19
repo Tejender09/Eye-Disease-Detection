@@ -10,7 +10,7 @@ The models in our team are:
 - EfficientNetV2-B0 (Rohit)
 - **DenseNet121 (Dev, this document)**
 - EfficientNetV2-S (Vidushi)
-- EyeDiseaseCNN (Tejender)
+- **EyeDiseaseCNN (Tejender)**
 
 My part is **DenseNet121**. I worked on my own branch (`dev-models`) and only pushed to `main` after my full task was done.
 
