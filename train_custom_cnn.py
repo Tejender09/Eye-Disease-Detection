@@ -1,4 +1,5 @@
 import csv
+import argparse
 import os
 import tempfile
 import time
@@ -204,6 +205,9 @@ class GradCAM:
         self.model = model
         self.activations = None
         self.gradients = None
+        for module in self.model.modules():
+            if isinstance(module, nn.ReLU):
+                module.inplace = False
         self.handles = [
             target_layer.register_forward_hook(self._forward_hook),
             target_layer.register_full_backward_hook(self._backward_hook),
@@ -289,7 +293,7 @@ def save_training_curves(history):
 
 
 def generate_gradcam_samples(model, test_dataset, eval_transform):
-    grad_cam = GradCAM(model, model.features[-1])
+    grad_cam = GradCAM(model, model.features[-3])
     samples_by_class = {}
     for image_path, label in test_dataset.samples:
         samples_by_class.setdefault(label, image_path)
@@ -310,7 +314,7 @@ def generate_gradcam_samples(model, test_dataset, eval_transform):
     grad_cam.close()
 
 
-def main():
+def main(resume=False):
     print("=" * 60)
     print("  Custom EyeDiseaseCNN Training Pipeline")
     print(f"  Device: {DEVICE}")
@@ -347,8 +351,28 @@ def main():
     )
     best_val_f1 = -1.0
     best_model_path = MODELS_DIR / "custom_cnn_best.pt"
+    resume_model_path = MODELS_DIR / "custom_cnn_resume.pt"
     history = []
-    for epoch in range(1, EPOCHS + 1):
+    start_epoch = 1
+    if resume:
+        checkpoint_path = (
+            resume_model_path if resume_model_path.exists() else best_model_path
+        )
+        if not checkpoint_path.exists():
+            raise FileNotFoundError(
+                f"Cannot resume: checkpoint not found at {checkpoint_path}"
+            )
+        checkpoint = torch.load(checkpoint_path, map_location=DEVICE)
+        model.load_state_dict(checkpoint["model_state_dict"])
+        if "optimizer_state_dict" in checkpoint:
+            optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+        if "scheduler_state_dict" in checkpoint:
+            scheduler.load_state_dict(checkpoint["scheduler_state_dict"])
+        best_val_f1 = checkpoint.get("val_f1", best_val_f1)
+        history = checkpoint.get("history", [])
+        start_epoch = checkpoint.get("epoch", 0) + 1
+        print(f"Resuming from epoch {start_epoch} using {checkpoint_path}")
+    for epoch in range(start_epoch, EPOCHS + 1):
         start_time = time.time()
         train_loss, train_acc = train_one_epoch(
             model, train_loader, criterion, optimizer
@@ -381,6 +405,15 @@ def main():
                 "val_f1": val_f1,
                 "epoch": epoch,
             }, best_model_path)
+        torch.save({
+            "model_state_dict": model.state_dict(),
+            "optimizer_state_dict": optimizer.state_dict(),
+            "scheduler_state_dict": scheduler.state_dict(),
+            "classes": train_dataset.classes,
+            "val_f1": best_val_f1,
+            "epoch": epoch,
+            "history": history,
+        }, resume_model_path)
     metrics_path = REPORTS_DIR / "custom_cnn_training_metrics.csv"
     with metrics_path.open("w", newline="", encoding="utf-8") as file:
         writer = csv.DictWriter(file, fieldnames=history[0].keys())
@@ -429,4 +462,10 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description="Train the custom eye disease CNN.")
+    parser.add_argument(
+        "--resume",
+        action="store_true",
+        help="Resume from the latest custom CNN checkpoint.",
+    )
+    main(resume=parser.parse_args().resume)
