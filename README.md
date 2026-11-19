@@ -121,6 +121,7 @@ Eye-Disease-Detection/
 │       ├── test/                  # 15% Independent test set
 │       └── prepare_data.py        # Automated preprocessing & audit script
 ├── models/                        # Model architectures and saved checkpoints
+├── train_custom_cnn.py            # Custom EyeDiseaseCNN baseline
 ├── reports/
 │   ├── audit_summary.csv          # High-level pipeline metrics
 │   ├── split_distribution.csv     # Per-class split distribution
@@ -129,10 +130,27 @@ Eye-Disease-Detection/
 │   └── image_dimensions.csv       # Dimensional metadata
 ├── Eye Dataset.v2-new-dataset.folder.zip # New raw dataset archive
 ├── DEVREADME.md                   # Developer contributions and architecture plan
+├── TejenderReadme.md              # Tejender's custom CNN contribution
 └── README.md                      # Project documentation and audit tracker
 ```
 
 ---
+
+### Custom CNN baseline
+
+`train_custom_cnn.py` trains the `EyeDiseaseCNN` model from scratch on all 12
+classes. It uses the same 224x224 RGB inputs, augmentations, class-weighted
+cross-entropy loss, validation macro F1 checkpoint selection, test metrics,
+confusion matrix, and Grad-CAM outputs as the transfer-learning models.
+
+Run it with:
+
+```bash
+python train_custom_cnn.py
+```
+
+Outputs are written to `models/custom_cnn_best.pt` and the corresponding
+`custom_cnn_*` files in `reports/`.
 
 ## 6. How to Run the Preprocessing Pipeline
 
