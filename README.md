@@ -6,11 +6,11 @@ An end-to-end deep learning project for automated detection and multi-class clas
 
 ## 1. Project Overview & Objectives
 
-The primary goal of this project is to develop, evaluate, and benchmark deep convolutional neural network (CNN) and transformer architectures for classifying eye disease images:
-* **Custom CNN Baseline** (Trained from scratch)
-* **ResNet50** (Residual connections, transfer learning)
-* **DenseNet121** (Dense feature-reuse connections)
-* **Vision Transformer (ViT)** (Self-attention patch processing, optional/exploratory)
+The primary goal of this project is to develop, evaluate, and benchmark deep convolutional neural network (CNN) and transfer-learning architectures for classifying eye disease images across 12 granular categories:
+* **Custom EyeDiseaseCNN** (Trained from scratch, compact baseline ~983k parameters — Tejender)
+* **DenseNet121** (Dense feature-reuse connections, transfer learning — Dev)
+* **MobileNetV3-Large** (Efficient mobile inverted bottleneck architecture — Riya)
+* **EfficientNetV2** (Progressive learning and fused MBConv architectures — Rohit & Vidushi)
 
 The target input format for all architectures is standardized to **$224 \times 224 \times 3$ RGB**.
 
@@ -116,34 +116,74 @@ Eye-Disease-Detection/
 ├── datasets/
 │   ├── raw/                       # Extracted clean raw dataset
 │   └── processed/                 # 70/15/15 preprocessed splits (224x224 RGB)
-│       ├── train/                 # 70% Training set
-│       ├── val/                   # 15% Validation set
-│       ├── test/                  # 15% Independent test set
+│       ├── train/                 # 70% Training set (9,943 images)
+│       ├── val/                   # 15% Validation set (2,131 images)
+│       ├── test/                  # 15% Independent test set (2,134 images)
 │       └── prepare_data.py        # Automated preprocessing & audit script
-├── models/                        # Model architectures and saved checkpoints
+├── models/                        # Saved checkpoints (.pt)
+│   ├── custom_cnn_best.pt         # Best Custom EyeDiseaseCNN weights (Epoch 23)
+│   └── densenet121_best.pt        # Best DenseNet121 weights (Epoch 23)
+├── train_custom_cnn.py            # Custom EyeDiseaseCNN training script
+├── gradcam_custom_cnn.py          # Standalone Grad-CAM visualizer for Custom CNN
+├── Dev_train_densenet121.py       # DenseNet121 transfer learning pipeline (Dev)
+├── train_mobilenetv3.py           # MobileNetV3-Large transfer learning pipeline (Riya)
 ├── reports/
 │   ├── audit_summary.csv          # High-level pipeline metrics
 │   ├── split_distribution.csv     # Per-class split distribution
-│   ├── exact_duplicates.csv       # Pre-split duplicate audit report
-│   ├── corrupted_images.csv       # Verification of file read integrity
-│   └── image_dimensions.csv       # Dimensional metadata
-├── Eye Dataset.v2-new-dataset.folder.zip # New raw dataset archive
-├── DEVREADME.md                   # Developer contributions and architecture plan
+│   ├── custom_cnn_test_report.txt # Test evaluation metrics for Custom CNN
+│   ├── custom_cnn_confusion_matrix.png # Confusion matrix plot
+│   ├── custom_cnn_learning_curves.png  # Loss & accuracy curves
+│   └── gradcam_samples/           # Generated Grad-CAM overlays (all models)
+├── DEVREADME.md                   # Dev's DenseNet121 documentation
+├── RIYA_README.md                 # Riya's MobileNetV3 documentation
+├── TejenderReadme.md              # Tejender's Custom CNN baseline documentation
 └── README.md                      # Project documentation and audit tracker
 ```
 
 ---
 
-## 6. How to Run the Preprocessing Pipeline
+## 6. How to Run
 
-Run the automated data preparation and audit pipeline:
+### 6.1 Data Preparation & Audit Pipeline
+Run the automated preprocessing pipeline:
 ```bash
 python datasets/processed/prepare_data.py
 ```
-
 This performs:
 1. Dynamic class scanning and raw data audit.
-2. Grouped, stratified 70 / 15 / 15 Train / Val / Test splitting.
+2. Grouped, stratified 70 / 15 / 15 Train / Val / Test splitting without cross-split leakage.
 3. Conversion to 3-channel RGB with high-quality Lanczos resampling to $224 \times 224$.
-4. Post-processing cross-split leakage verification.
-5. Automated generation of audit CSVs in `reports/`.
+4. Automated generation of audit CSVs in `reports/`.
+
+### 6.2 Training Custom EyeDiseaseCNN Baseline
+Train the 12-class custom convolutional network from scratch:
+```bash
+python train_custom_cnn.py
+```
+Outputs are saved to `models/custom_cnn_best.pt` and corresponding reports in `reports/`.
+
+### 6.3 Standalone Grad-CAM Visualizations
+Generate explainability heatmaps on test classes or a specific eye image:
+```bash
+# Generate sample heatmaps for all 12 classes
+python gradcam_custom_cnn.py
+
+# Explain a specific test image
+python gradcam_custom_cnn.py --image "datasets/processed/test/Cataract/Cataract_00000.jpg"
+```
+
+---
+
+## 7. Model Benchmark & Test Evaluation
+
+All models are evaluated on the exact same unseen test set of **2,134 images** across 12 disease classes:
+
+| Model | Pretrained Weights | Trainable Params | Test Accuracy | Macro Precision | Macro Recall | Macro F1 |
+|---|---|---|---|---|---|---|
+| **EyeDiseaseCNN (Custom Baseline)** | **None (From Scratch)** | **983,052** | **75.54%** | **0.7431** | **0.7703** | **0.7511** |
+| DenseNet121 (Dev) | ImageNet-1k | ~7,000,000 | 92.88% | 0.9183 | 0.9276 | 0.9223 |
+
+### Observations:
+- **Baseline Efficiency**: The custom scratch baseline reaches **75.54% accuracy** with fewer than 1 million parameters, demonstrating that a compact, specialized convolutional network can learn ocular representations without pretraining.
+- **Transfer Learning Advantage**: Pretrained ImageNet feature extractors like DenseNet121 boost accuracy to **92.88%**, benefiting especially from general low-level texture and edge filters.
+- **Top Recognized Categories**: Both architectures achieve >90% F1 scores on conditions with distinct structural landmarks: *Pinguecula*, *Xanthelasma*, *Pterygium*, and *Cataract*.
