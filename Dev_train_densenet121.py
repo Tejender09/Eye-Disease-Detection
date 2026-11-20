@@ -20,7 +20,6 @@ from torch.utils.data import DataLoader, Dataset
 from torchvision import transforms, models
 from torchvision.models import DenseNet121_Weights
 
-import torch.nn.functional as F
 from sklearn.metrics import classification_report, confusion_matrix, f1_score, recall_score, precision_score
 
 # ---------------- CONFIGURATION ----------------
@@ -35,11 +34,9 @@ TEST_DIR = DATASET_DIR / "test"
 
 MODELS_DIR = PROJECT_ROOT / "models"
 REPORTS_DIR = PROJECT_ROOT / "reports"
-GRADCAM_DIR = REPORTS_DIR / "gradcam_samples"
 
 MODELS_DIR.mkdir(parents=True, exist_ok=True)
 REPORTS_DIR.mkdir(parents=True, exist_ok=True)
-GRADCAM_DIR.mkdir(parents=True, exist_ok=True)
 
 IMAGE_SIZE = (224, 224)   # Same as Riya
 BATCH_SIZE = 32           # Try 32 first; drop to 16 if CUDA OOM (see note below)
@@ -199,93 +196,6 @@ def unfreeze_backbone(model):
     """
     for param in model.parameters():
         param.requires_grad = True
-
-
-# ---------------- GRAD-CAM EXPLAINABILITY ----------------
-# Same GradCAM class as Riya's, with the target layer changed to
-# model.features.norm5 (BatchNorm2d at the end of DenseNet121's feature stack).
-
-class GradCAM:
-    """Hook-free Gradient-weighted Class Activation Mapping for DenseNet121.
-
-    Why hook-free?  torchvision's DenseNet applies an in-place ReLU immediately
-    after norm5, which corrupts the saved activation tensor that a forward hook
-    would capture and breaks the backward hook's gradient flow.  Instead we
-    re-run only model.features() with grad enabled, call retain_grad() on the
-    feature map, then manually reconstruct the rest of the forward pass
-    (relu → pool → classifier) so backward() gives us clean gradients on the
-    un-modified feature tensor.
-    """
-
-    def __init__(self, model, target_layer=None):
-        # target_layer kept in signature for API compatibility; not used here.
-        self.model = model
-
-    def generate_heatmap(self, input_tensor, target_class=None):
-        self.model.eval()
-        self.model.zero_grad()
-
-        # --- forward through feature extractor only ---
-        # We need gradients w.r.t. the raw feature map before the in-place ReLU.
-        feats = self.model.features(input_tensor)  # shape: (1, 1024, H, W)
-        feats.retain_grad()                        # keep grad on a non-leaf tensor
-
-        # --- reconstruct the rest of the forward pass (no in-place ops) ---
-        out    = F.relu(feats)                           # non-in-place relu
-        out    = F.adaptive_avg_pool2d(out, (1, 1))      # global avg pool
-        out    = out.flatten(1)                          # (1, 1024)
-        logits = self.model.classifier(out)              # (1, num_classes)
-
-        # --- pick target class ---
-        if target_class is None:
-            target_class = torch.argmax(logits, dim=1).item()
-
-        # --- backward ---
-        logits[0, target_class].backward()
-
-        # --- build CAM from feature-map gradients ---
-        # weights: channel importance via global average of gradients
-        weights = feats.grad.mean(dim=(2, 3), keepdim=True)  # (1, 1024, 1, 1)
-        # weighted sum across channels, then clamp negatives
-        cam = (weights * F.relu(feats).detach()).sum(dim=1).squeeze()  # (H, W)
-        cam = torch.clamp(cam, min=0).cpu().numpy()
-
-        # Normalise to [0, 1]
-        if np.max(cam) > 0:
-            cam = cam / np.max(cam)
-
-        return cam, target_class
-
-    def remove_hooks(self):
-        # No hooks registered — method kept for API compatibility with Riya's code.
-        pass
-
-
-def save_gradcam_overlay(orig_img_path, cam, pred_class_name, true_class_name, save_path):
-    """Overlay Grad-CAM heatmap on original image and save a 3-panel figure."""
-    orig_img   = Image.open(orig_img_path).convert("RGB").resize(IMAGE_SIZE)
-    cam_resized = Image.fromarray(np.uint8(255 * cam)).resize(IMAGE_SIZE, Image.Resampling.BILINEAR)
-    heatmap    = plt.cm.jet(np.array(cam_resized) / 255.0)[:, :, :3]
-
-    overlay = 0.5 * (np.array(orig_img) / 255.0) + 0.5 * heatmap
-    overlay = np.clip(overlay, 0, 1)
-
-    fig, axes = plt.subplots(1, 3, figsize=(12, 4))
-    axes[0].imshow(orig_img)
-    axes[0].set_title(f"Original: {true_class_name}", fontsize=10)
-    axes[0].axis("off")
-
-    axes[1].imshow(cam, cmap="jet")
-    axes[1].set_title("Activation Heatmap", fontsize=10)
-    axes[1].axis("off")
-
-    axes[2].imshow(overlay)
-    axes[2].set_title(f"Grad-CAM: Pred={pred_class_name}", fontsize=10)
-    axes[2].axis("off")
-
-    plt.tight_layout()
-    plt.savefig(save_path, dpi=150)
-    plt.close()
 
 
 # ---------------- TRAINING & EVALUATION FUNCTIONS ----------------
@@ -537,39 +447,8 @@ def main():
     plt.savefig(cm_path, dpi=150)
     plt.close()
     print(f"Confusion matrix saved to {cm_path}")
-
-    # ---------------- GRAD-CAM EXPLAINABILITY SAMPLES ----------------
-    # Target layer: model.features.norm5 (BatchNorm2d at the end of DenseNet121's
-    # feature stack — the last point where spatial activations are still available
-    # before the global average pool collapses them).
-    # Filenames include "densenet121" so they never overwrite Riya's gradcam files.
-    print("\nGenerating Grad-CAM explainability heatmaps for sample test images...")
-    grad_cam = GradCAM(model, target_layer=model.features.norm5)
-
-    # Pick one image from each class in the test set
-    samples_by_class = {}
-    for path, label in test_dataset.samples:
-        if label not in samples_by_class:
-            samples_by_class[label] = path
-        if len(samples_by_class) == len(train_dataset.classes):
-            break
-
-    for class_idx, sample_path in samples_by_class.items():
-        class_name = train_dataset.classes[class_idx]
-        raw_img    = Image.open(sample_path).convert("RGB")
-        input_tensor = eval_transform(raw_img).unsqueeze(0).to(DEVICE)
-
-        cam, pred_idx = grad_cam.generate_heatmap(input_tensor)
-        pred_name     = train_dataset.classes[pred_idx]
-
-        # Prefix with "densenet121_" to avoid colliding with Riya's gradcam files
-        save_name = f"gradcam_densenet121_{class_name.replace(' ', '_')}.png"
-        save_path = GRADCAM_DIR / save_name
-        save_gradcam_overlay(sample_path, cam, pred_name, class_name, save_path)
-
-    grad_cam.remove_hooks()
-    print(f"Grad-CAM samples saved to {GRADCAM_DIR}\n")
     print("DenseNet121 training & evaluation pipeline completed successfully!")
+    print("For Grad-CAM heatmaps, use densenet_gradcam.py.")
 
 
 if __name__ == "__main__":
