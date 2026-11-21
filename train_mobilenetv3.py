@@ -31,14 +31,12 @@ TEST_DIR = DATASET_DIR / "test"
 
 MODELS_DIR = PROJECT_ROOT / "models"
 REPORTS_DIR = PROJECT_ROOT / "reports"
-GRADCAM_DIR = REPORTS_DIR / "gradcam_samples"
 
 MODELS_DIR.mkdir(parents=True, exist_ok=True)
 REPORTS_DIR.mkdir(parents=True, exist_ok=True)
-GRADCAM_DIR.mkdir(parents=True, exist_ok=True)
 
 IMAGE_SIZE = (224, 224)
-BATCH_SIZE = 32
+BATCH_SIZE = 16
 NUM_WORKERS = 0  # Safe default on Windows
 RANDOM_SEED = 42
 
@@ -154,80 +152,6 @@ def unfreeze_backbone(model):
     """Unfreeze all layers for Phase 2 (Fine-Tuning)."""
     for param in model.parameters():
         param.requires_grad = True
-
-# ---------------- GRAD-CAM EXPLAINABILITY ----------------
-
-class GradCAM:
-    """Gradient-weighted Class Activation Mapping for MobileNetV3."""
-    def __init__(self, model, target_layer):
-        self.model = model
-        self.target_layer = target_layer
-        self.gradients = None
-        self.activations = None
-        self.hook_handles = []
-        self._register_hooks()
-
-    def _register_hooks(self):
-        def forward_hook(module, input, output):
-            self.activations = output.detach()
-
-        def backward_hook(module, grad_in, grad_out):
-            self.gradients = grad_out[0].detach()
-
-        self.hook_handles.append(self.target_layer.register_forward_hook(forward_hook))
-        self.hook_handles.append(self.target_layer.register_full_backward_hook(backward_hook))
-
-    def generate_heatmap(self, input_tensor, target_class=None):
-        self.model.eval()
-        output = self.model(input_tensor)
-        
-        if target_class is None:
-            target_class = torch.argmax(output, dim=1).item()
-            
-        self.model.zero_grad()
-        loss = output[0, target_class]
-        loss.backward()
-
-        # Global average pool the gradients
-        weights = torch.mean(self.gradients, dim=(2, 3), keepdim=True)
-        # Weighted combination of forward activation maps
-        cam = torch.sum(weights * self.activations, dim=1).squeeze()
-        cam = torch.clamp(cam, min=0).cpu().numpy()
-        
-        # Normalize between 0 and 1
-        if np.max(cam) > 0:
-            cam = cam / np.max(cam)
-        return cam, target_class
-
-    def remove_hooks(self):
-        for handle in self.hook_handles:
-            handle.remove()
-
-def save_gradcam_overlay(orig_img_path, cam, pred_class_name, true_class_name, save_path):
-    """Overlay Grad-CAM heatmap on original image and save figure."""
-    orig_img = Image.open(orig_img_path).convert("RGB").resize(IMAGE_SIZE)
-    cam_resized = Image.fromarray(np.uint8(255 * cam)).resize(IMAGE_SIZE, Image.Resampling.BILINEAR)
-    heatmap = plt.cm.jet(np.array(cam_resized) / 255.0)[:, :, :3]
-    
-    overlay = 0.5 * (np.array(orig_img) / 255.0) + 0.5 * heatmap
-    overlay = np.clip(overlay, 0, 1)
-
-    fig, axes = plt.subplots(1, 3, figsize=(12, 4))
-    axes[0].imshow(orig_img)
-    axes[0].set_title(f"Original: {true_class_name}", fontsize=10)
-    axes[0].axis("off")
-
-    axes[1].imshow(cam, cmap="jet")
-    axes[1].set_title(f"Activation Heatmap", fontsize=10)
-    axes[1].axis("off")
-
-    axes[2].imshow(overlay)
-    axes[2].set_title(f"Grad-CAM: Pred={pred_class_name}", fontsize=10)
-    axes[2].axis("off")
-
-    plt.tight_layout()
-    plt.savefig(save_path, dpi=150)
-    plt.close()
 
 # ---------------- TRAINING & EVALUATION FUNCTIONS ----------------
 
@@ -459,34 +383,7 @@ def main():
     cm_path = REPORTS_DIR / "mobilenetv3_confusion_matrix.png"
     plt.savefig(cm_path, dpi=150)
     plt.close()
-    print(f"Confusion matrix saved to {cm_path}")
-
-    # ---------------- GRAD-CAM EXPLAINABILITY SAMPLES ----------------
-    print("\nGenerating Grad-CAM explainability heatmaps for sample test images...")
-    grad_cam = GradCAM(model, target_layer=model.features[-1])
-
-    # Sample 1 image from each class in test set
-    samples_by_class = {}
-    for path, label in test_dataset.samples:
-        if label not in samples_by_class:
-            samples_by_class[label] = path
-        if len(samples_by_class) == len(train_dataset.classes):
-            break
-
-    for class_idx, sample_path in samples_by_class.items():
-        class_name = train_dataset.classes[class_idx]
-        raw_img = Image.open(sample_path).convert("RGB")
-        input_tensor = eval_transform(raw_img).unsqueeze(0).to(DEVICE)
-
-        cam, pred_idx = grad_cam.generate_heatmap(input_tensor)
-        pred_name = train_dataset.classes[pred_idx]
-
-        save_name = f"gradcam_{class_name.replace(' ', '_')}.png"
-        save_path = GRADCAM_DIR / save_name
-        save_gradcam_overlay(sample_path, cam, pred_name, class_name, save_path)
-
-    grad_cam.remove_hooks()
-    print(f"Grad-CAM samples saved to {GRADCAM_DIR}\n")
+    print(f"Confusion matrix saved to {cm_path}\n")
     print("MobileNetV3-Large training & evaluation pipeline completed successfully!")
 
 if __name__ == "__main__":

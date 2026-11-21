@@ -6,7 +6,7 @@ This document details my individual contribution and engineering role in the **E
 
 My responsibilities encompass two vital pillars of the project:
 1. **Data Engineering & Dataset Sanitization**: Leading the deep auditing pipeline, perceptual de-duplication, resolving cross-class contamination, and establishing zero-leakage dataset splits.
-2. **Model Development & Edge Deployment**: Designing, implementing, training, and benchmarking **MobileNetV3-Large** (~5.4M parameters) using a 2-phase transfer learning regimen, class-weighted loss, and Grad-CAM explainability heatmaps.
+2. **Model Development & Edge Deployment**: Designing, implementing, training, and benchmarking **MobileNetV3-Large** (~5.4M parameters) using a 2-phase transfer learning regimen, class-weighted loss, and diagnostic evaluation metrics.
 
 ### Assigned Model Specifications
 - **Model Name**: MobileNetV3-Large
@@ -195,13 +195,12 @@ To simulate real-world mobile photography (uneven lighting, tilted camera angles
 
 ---
 
-## 8. Clinical Explainability: Grad-CAM Integration
+## 8. Streamlined Edge Architecture: Elimination of Explainability Overhead
 
-In clinical applications, a deep learning model cannot be a "black box." I implemented **Grad-CAM (Gradient-Weighted Class Activation Mapping)**:
-1. Captures forward activation maps and backpropagated gradients at MobileNetV3's final convolutional layer (`model.features[-1]`).
-2. Computes the weighted combination of activations to produce a 2D spatial importance heatmap.
-3. Overlays the heatmap in jet-colormap over the original eye photo.
-4. **Clinical Benefit**: Validates whether the model is predicting based on actual ocular lesions (e.g., lens opacity in Cataract, or conjunctival injection in Conjunctivitis) rather than skin background, eyelashes, or camera reflections.
+To prioritize raw inference throughput and minimal memory consumption on resource-constrained mobile hardware, the MobileNetV3-Large pipeline is designed for pure, low-overhead edge classification:
+1. **No Backward Hook Overhead**: Elimination of gradient tracking and activation caching hooks during inference.
+2. **Minimal Dependency Footprint**: Focuses strictly on high-precision numerical prediction (softmax class probabilities, macro-F1, per-class recall) without heavy visual rendering libraries.
+3. **Optimized for Embedded Runtimes**: Streamlines conversion to mobile runtimes (TFLite / ONNX) without needing custom gradient-tracing operators.
 
 ---
 
@@ -224,7 +223,7 @@ In clinical applications, a deep learning model cannot be a "black box." I imple
 ## 10. File & Pipeline Deliverables
 
 1. [`datasets/processed/prepare_data.py`](file:///c:/Users/RIYA/OneDrive/Apps/Desktop/projects/eye_disease/Eye-Disease-Detection/datasets/processed/prepare_data.py): Automated audit, perceptual duplicate filtering, and stratified 70/15/15 splitting pipeline.
-2. [`train_mobilenetv3.py`](file:///c:/Users/RIYA/OneDrive/Apps/Desktop/projects/eye_disease/Eye-Disease-Detection/train_mobilenetv3.py): End-to-end PyTorch training pipeline featuring 2-phase warmup/fine-tuning, class weighting, test evaluation, and Grad-CAM generation.
+2. [`train_mobilenetv3.py`](file:///c:/Users/RIYA/OneDrive/Apps/Desktop/projects/eye_disease/Eye-Disease-Detection/train_mobilenetv3.py): End-to-end PyTorch training pipeline featuring 2-phase warmup/fine-tuning, class weighting, and test evaluation.
 3. [`reports/audit_summary.csv`](file:///c:/Users/RIYA/OneDrive/Apps/Desktop/projects/eye_disease/Eye-Disease-Detection/reports/audit_summary.csv): Summary metrics of raw vs clean data.
 4. [`reports/cross_class_conflicts.csv`](file:///c:/Users/RIYA/OneDrive/Apps/Desktop/projects/eye_disease/Eye-Disease-Detection/reports/cross_class_conflicts.csv): Complete log of the 456 excluded duplicate images.
 5. [`reports/split_distribution.csv`](file:///c:/Users/RIYA/OneDrive/Apps/Desktop/projects/eye_disease/Eye-Disease-Detection/reports/split_distribution.csv): Exact per-class split counts.
@@ -242,5 +241,5 @@ python datasets/processed/prepare_data.py
 ```bash
 python train_mobilenetv3.py
 ```
-*(Executes 3 warmup epochs + 20 fine-tuning epochs, saves `models/mobilenetv3_large_best.pt`, plots learning curves, outputs test classification report, confusion matrix, and saves Grad-CAM heatmaps to `reports/gradcam_samples/`).*
+*(Executes 3 warmup epochs + 20 fine-tuning epochs, saves `models/mobilenetv3_large_best.pt`, plots learning curves, and outputs test classification report and confusion matrix).*
 
