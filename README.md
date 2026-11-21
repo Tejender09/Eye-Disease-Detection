@@ -10,7 +10,7 @@ The primary goal of this project is to develop, evaluate, and benchmark deep con
 * **Custom EyeDiseaseCNN** (Trained from scratch, compact baseline ~983k parameters — Tejender)
 * **DenseNet121** (Dense feature-reuse connections, transfer learning — Dev)
 * **MobileNetV3-Large** (Efficient mobile inverted bottleneck architecture — Riya)
-* **EfficientNetV2** (Progressive learning and fused MBConv architectures — Rohit & Vidushi)
+* **EfficientNetV2-S** (Progressive learning and fused MBConv architecture — Vidushi)
 
 The target input format for all architectures is standardized to **$224 \times 224 \times 3$ RGB**.
 
@@ -122,11 +122,15 @@ Eye-Disease-Detection/
 │       └── prepare_data.py        # Automated preprocessing & audit script
 ├── models/                        # Saved checkpoints (.pt)
 │   ├── custom_cnn_best.pt         # Best Custom EyeDiseaseCNN weights (Epoch 23)
-│   └── densenet121_best.pt        # Best DenseNet121 weights (Epoch 23)
-├── train_custom_cnn.py            # Custom EyeDiseaseCNN training script
+│   ├── densenet121_best.pt        # Best DenseNet121 weights (Epoch 23)
+│   ├── mobilenetv3_large_best.pt  # Best MobileNetV3-Large weights
+│   └── efficientnetv2_s_best.pt   # Target checkpoint for EfficientNetV2-S
+├── train_custom_cnn.py            # Custom EyeDiseaseCNN training script (Tejender)
 ├── gradcam_custom_cnn.py          # Standalone Grad-CAM visualizer for Custom CNN
 ├── Dev_train_densenet121.py       # DenseNet121 transfer learning pipeline (Dev)
+├── densenet_gradcam.py            # Standalone Grad-CAM visualizer for DenseNet121
 ├── train_mobilenetv3.py           # MobileNetV3-Large transfer learning pipeline (Riya)
+├── train_efficientnetv2_s.py      # EfficientNetV2-S transfer learning pipeline (Vidushi)
 ├── reports/
 │   ├── audit_summary.csv          # High-level pipeline metrics
 │   ├── split_distribution.csv     # Per-class split distribution
@@ -137,6 +141,7 @@ Eye-Disease-Detection/
 ├── DEVREADME.md                   # Dev's DenseNet121 documentation
 ├── RIYA_README.md                 # Riya's MobileNetV3 documentation
 ├── TejenderReadme.md              # Tejender's Custom CNN baseline documentation
+├── VidushiReadme.md               # Vidushi's EfficientNetV2-S documentation
 └── README.md                      # Project documentation and audit tracker
 ```
 
@@ -172,6 +177,17 @@ python gradcam_custom_cnn.py
 python gradcam_custom_cnn.py --image "datasets/processed/test/Cataract/Cataract_00000.jpg"
 ```
 
+### 6.4 Training EfficientNetV2-S Pipeline (Vidushi)
+Train the 12-class EfficientNetV2-S transfer learning model:
+```bash
+python train_efficientnetv2_s.py
+```
+This executes:
+1. Inverse-frequency class weighting to mitigate class imbalance.
+2. Phase 1 (3 Warmup Epochs) with feature backbone frozen.
+3. Phase 2 (20 Fine-Tuning Epochs) with full backbone unfrozen and Cosine Annealing learning rate schedule.
+4. Unseen test set evaluation, saving best weights to `models/efficientnetv2_s_best.pt` and metrics to `reports/`.
+
 ---
 
 ## 7. Model Benchmark & Test Evaluation
@@ -182,8 +198,11 @@ All models are evaluated on the exact same unseen test set of **2,134 images** a
 |---|---|---|---|---|---|---|
 | **EyeDiseaseCNN (Custom Baseline)** | **None (From Scratch)** | **983,052** | **75.54%** | **0.7431** | **0.7703** | **0.7511** |
 | DenseNet121 (Dev) | ImageNet-1k | ~7,000,000 | 92.88% | 0.9183 | 0.9276 | 0.9223 |
+| MobileNetV3-Large (Riya) | ImageNet-1k | ~5,400,000 | Benchmarked | Benchmarked | Benchmarked | Benchmarked |
+| **EfficientNetV2-S (Vidushi)** | **ImageNet-1k** | **~21,458,488** | *Ready for Training* | *Ready for Training* | *Ready for Training* | *Ready for Training* |
 
 ### Observations:
 - **Baseline Efficiency**: The custom scratch baseline reaches **75.54% accuracy** with fewer than 1 million parameters, demonstrating that a compact, specialized convolutional network can learn ocular representations without pretraining.
 - **Transfer Learning Advantage**: Pretrained ImageNet feature extractors like DenseNet121 boost accuracy to **92.88%**, benefiting especially from general low-level texture and edge filters.
-- **Top Recognized Categories**: Both architectures achieve >90% F1 scores on conditions with distinct structural landmarks: *Pinguecula*, *Xanthelasma*, *Pterygium*, and *Cataract*.
+- **Architecture Scaling**: EfficientNetV2-S provides the highest representation capacity (~21.5M parameters) with modern Fused-MBConv layers that maximize GPU compute density and training throughput.
+- **Top Recognized Categories**: Architectures achieve >90% F1 scores on conditions with distinct structural landmarks: *Pinguecula*, *Xanthelasma*, *Pterygium*, and *Cataract*.
