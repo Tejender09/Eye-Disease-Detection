@@ -36,7 +36,7 @@ MODELS_DIR.mkdir(parents=True, exist_ok=True)
 REPORTS_DIR.mkdir(parents=True, exist_ok=True)
 
 IMAGE_SIZE = (224, 224)
-BATCH_SIZE = 16
+BATCH_SIZE = 32
 NUM_WORKERS = 0  # Safe default on Windows
 RANDOM_SEED = 42
 
