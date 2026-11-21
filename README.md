@@ -122,7 +122,8 @@ Eye-Disease-Detection/
 │       └── prepare_data.py        # Automated preprocessing & audit script
 ├── models/                        # Saved checkpoints (.pt)
 │   ├── custom_cnn_best.pt         # Best Custom EyeDiseaseCNN weights (Epoch 23)
-│   └── densenet121_best.pt        # Best DenseNet121 weights (Epoch 23)
+│   ├── densenet121_best.pt        # Best DenseNet121 weights (Epoch 23)
+│   └── mobilenetv3_large_best.pt  # Best MobileNetV3-Large weights (Epoch 16)
 ├── train_custom_cnn.py            # Custom EyeDiseaseCNN training script
 ├── gradcam_custom_cnn.py          # Standalone Grad-CAM visualizer for Custom CNN
 ├── Dev_train_densenet121.py       # DenseNet121 transfer learning pipeline (Dev)
@@ -131,9 +132,15 @@ Eye-Disease-Detection/
 │   ├── audit_summary.csv          # High-level pipeline metrics
 │   ├── split_distribution.csv     # Per-class split distribution
 │   ├── custom_cnn_test_report.txt # Test evaluation metrics for Custom CNN
-│   ├── custom_cnn_confusion_matrix.png # Confusion matrix plot
-│   ├── custom_cnn_learning_curves.png  # Loss & accuracy curves
-│   └── gradcam_samples/           # Generated Grad-CAM overlays (all models)
+│   ├── custom_cnn_confusion_matrix.png # Custom CNN confusion matrix plot
+│   ├── custom_cnn_learning_curves.png  # Custom CNN loss & accuracy curves
+│   ├── densenet121_test_report.txt     # Test evaluation metrics for DenseNet121
+│   ├── densenet121_confusion_matrix.png # DenseNet121 confusion matrix plot
+│   ├── densenet121_learning_curves.png  # DenseNet121 loss & accuracy curves
+│   ├── mobilenetv3_test_report.txt     # Test evaluation metrics for MobileNetV3
+│   ├── mobilenetv3_confusion_matrix.png # MobileNetV3 confusion matrix plot
+│   ├── mobilenetv3_learning_curves.png  # MobileNetV3 loss & accuracy curves
+│   └── gradcam_samples/           # Generated Grad-CAM overlays
 ├── DEVREADME.md                   # Dev's DenseNet121 documentation
 ├── RIYA_README.md                 # Riya's MobileNetV3 documentation
 ├── TejenderReadme.md              # Tejender's Custom CNN baseline documentation
@@ -162,7 +169,21 @@ python train_custom_cnn.py
 ```
 Outputs are saved to `models/custom_cnn_best.pt` and corresponding reports in `reports/`.
 
-### 6.3 Standalone Grad-CAM Visualizations
+### 6.3 Training MobileNetV3-Large (Edge Model)
+Train the 12-class MobileNetV3-Large transfer-learning model (3 warmup epochs + 20 fine-tuning epochs):
+```bash
+python train_mobilenetv3.py
+```
+Outputs are saved to `models/mobilenetv3_large_best.pt` and corresponding reports in `reports/`.
+
+### 6.4 Training DenseNet121 (Dense Feature-Reuse Model)
+Train the DenseNet121 transfer-learning model (3 warmup epochs + 20 fine-tuning epochs):
+```bash
+python Dev_train_densenet121.py
+```
+Outputs are saved to `models/densenet121_best.pt` and corresponding reports in `reports/`.
+
+### 6.5 Standalone Grad-CAM Visualizations
 Generate explainability heatmaps on test classes or a specific eye image:
 ```bash
 # Generate sample heatmaps for all 12 classes
@@ -181,9 +202,12 @@ All models are evaluated on the exact same unseen test set of **2,134 images** a
 | Model | Pretrained Weights | Trainable Params | Test Accuracy | Macro Precision | Macro Recall | Macro F1 |
 |---|---|---|---|---|---|---|
 | **EyeDiseaseCNN (Custom Baseline)** | **None (From Scratch)** | **983,052** | **75.54%** | **0.7431** | **0.7703** | **0.7511** |
-| DenseNet121 (Dev) | ImageNet-1k | ~7,000,000 | 92.88% | 0.9183 | 0.9276 | 0.9223 |
+| **MobileNetV3-Large (Riya)** | **ImageNet-1k** | **~5,400,000** | **92.60%** | **0.9212** | **0.9233** | **0.9220** |
+| **DenseNet121 (Dev)** | **ImageNet-1k** | **~7,000,000** | **92.88%** | **0.9183** | **0.9276** | **0.9223** |
 
 ### Observations:
 - **Baseline Efficiency**: The custom scratch baseline reaches **75.54% accuracy** with fewer than 1 million parameters, demonstrating that a compact, specialized convolutional network can learn ocular representations without pretraining.
-- **Transfer Learning Advantage**: Pretrained ImageNet feature extractors like DenseNet121 boost accuracy to **92.88%**, benefiting especially from general low-level texture and edge filters.
-- **Top Recognized Categories**: Both architectures achieve >90% F1 scores on conditions with distinct structural landmarks: *Pinguecula*, *Xanthelasma*, *Pterygium*, and *Cataract*.
+- **Edge Model Optimization (MobileNetV3-Large)**: MobileNetV3-Large achieves virtually identical macro-F1 to DenseNet121 (**0.9220 vs. 0.9223**) and **92.60% accuracy** while using ~23% fewer parameters, offering superior inference throughput and minimal latency suitable for on-device mobile diagnostics.
+- **Dense Feature-Reuse (DenseNet121)**: DenseNet121 reaches the highest overall accuracy (**92.88%**) and macro recall (**0.9276**), benefiting from dense skip connections that concatenate multi-level feature maps.
+- **Top Recognized Categories**: All architectures achieve >95% F1 scores on conditions with distinct structural landmarks: *Pinguecula*, *Xanthelasma*, *Pterygium*, and *Cataract*.
+- **Clinical Ambiguity Area**: Across all models, differentiating between *Allergic Conjunctivitis* (~0.78 F1) and *Viral Conjunctivitis* (~0.83 F1) presents the most challenging classification boundary due to shared clinical signs of conjunctival redness and swelling.

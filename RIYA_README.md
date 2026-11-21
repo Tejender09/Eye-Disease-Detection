@@ -195,12 +195,56 @@ To simulate real-world mobile photography (uneven lighting, tilted camera angles
 
 ---
 
-## 8. Streamlined Edge Architecture: Elimination of Explainability Overhead
+## 8. Experimental Results & Test Evaluation
 
-To prioritize raw inference throughput and minimal memory consumption on resource-constrained mobile hardware, the MobileNetV3-Large pipeline is designed for pure, low-overhead edge classification:
-1. **No Backward Hook Overhead**: Elimination of gradient tracking and activation caching hooks during inference.
-2. **Minimal Dependency Footprint**: Focuses strictly on high-precision numerical prediction (softmax class probabilities, macro-F1, per-class recall) without heavy visual rendering libraries.
-3. **Optimized for Embedded Runtimes**: Streamlines conversion to mobile runtimes (TFLite / ONNX) without needing custom gradient-tracing operators.
+The model was trained for 23 epochs using the 2-phase schedule (3 warmup epochs with frozen backbone + 20 fine-tuning epochs with cosine annealing decay). The optimal checkpoint was selected based on validation macro-F1 at **Epoch 16** with a validation macro-F1 of **0.9130**.
+
+### 8.1 Overall Performance on Unseen Test Split (2,134 Images)
+
+| Evaluation Metric | Score | Clinical / Operational Interpretation |
+| :--- | :---: | :--- |
+| **Test Accuracy** | **92.60%** | Overall top-1 multi-class classification accuracy across all 12 conditions |
+| **Macro Precision** | **0.9212** | Unweighted mean precision across all categories (low false discovery) |
+| **Macro Recall** | **0.9233** | Unweighted mean sensitivity (minimizes dangerous missed diagnoses) |
+| **Macro F1-Score** | **0.9220** | Balanced harmonic score accounting for class imbalance |
+| **Weighted F1-Score** | **0.9257** | Sample-weighted F1 performance across the test distribution |
+
+### 8.2 Per-Class Performance Breakdown
+
+| Disease Class | Precision | Recall (Sensitivity) | F1-Score | Support (Test Images) |
+| :--- | :---: | :---: | :---: | :---: |
+| **Pinguecula** | 1.0000 | 1.0000 | **1.0000** | 55 |
+| **Xanthelasma** | 1.0000 | 1.0000 | **1.0000** | 186 |
+| **Pterygium** | 0.9960 | 0.9767 | **0.9863** | 258 |
+| **Cataract** | 0.9661 | 0.9661 | **0.9661** | 236 |
+| **Stye** | 0.9326 | 0.9920 | **0.9614** | 251 |
+| **Healthy** | 0.9539 | 0.9673 | **0.9606** | 214 |
+| **Blepharitis** | 0.9707 | 0.9299 | **0.9499** | 214 |
+| **Bacterial Conjunctivitis** | 0.8718 | 0.9007 | **0.8860** | 151 |
+| **Uveitis** | 0.8625 | 0.8846 | **0.8734** | 78 |
+| **Glaucoma** | 0.8615 | 0.8750 | **0.8682** | 64 |
+| **Viral Conjunctivitis** | 0.8571 | 0.8018 | **0.8286** | 217 |
+| **Allergic Conjunctivitis** | 0.7820 | 0.7857 | **0.7838** | 210 |
+
+### 8.3 Key Analytical Findings & Clinical Insights
+
+1. **Flawless Recognition on Structural Pathology**:
+   - Both **Pinguecula** and **Xanthelasma** achieved perfect **1.0000 F1-scores** (100% precision and 100% recall), confirming that MobileNetV3's depthwise separable filters easily capture distinct lipid plaques and conjunctival deposits.
+   - **Pterygium** (0.9863 F1) and **Cataract** (0.9661 F1) demonstrated near-perfect identification of corneal fibrovascular invasion and lens opacity.
+2. **Robust Recall on High-Risk Minority Diseases**:
+   - Class-weighted Cross-Entropy loss successfully prevented majority bias: **Glaucoma** achieved **87.50% recall** and **Uveitis** achieved **88.46% recall**, ensuring dangerous vision-threatening diseases are caught early.
+3. **Red-Eye Differential Diagnosis**:
+   - The primary area of residual ambiguity lies between **Allergic Conjunctivitis** (0.7838 F1) and **Viral Conjunctivitis** (0.8286 F1). Because both conditions exhibit widespread conjunctival hyperemia (pinkness/redness) with very subtle physical differences on non-slit-lamp phone cameras, this matches expected clinical diagnostic challenges.
+
+### 8.4 Generated Artifacts & Verification
+
+| Output | Location | Description |
+| :--- | :--- | :--- |
+| **Best Checkpoint** | `models/mobilenetv3_large_best.pt` | Model weights with highest validation macro-F1 (Epoch 16, Val F1 = 0.9130) |
+| **Test Report** | `reports/mobilenetv3_test_report.txt` | Complete test classification report with precision, recall, and F1 |
+| **Confusion Matrix** | `reports/mobilenetv3_confusion_matrix.png` | 12×12 test set confusion matrix visualization |
+| **Learning Curves** | `reports/mobilenetv3_learning_curves.png` | Train vs validation loss and accuracy across warmup and fine-tuning |
+| **Training Metrics** | `reports/mobilenetv3_training_metrics.csv` | Epoch-by-epoch loss, accuracy, and F1 logs |
 
 ---
 
@@ -222,11 +266,15 @@ To prioritize raw inference throughput and minimal memory consumption on resourc
 
 ## 10. File & Pipeline Deliverables
 
-1. [`datasets/processed/prepare_data.py`](file:///c:/Users/RIYA/OneDrive/Apps/Desktop/projects/eye_disease/Eye-Disease-Detection/datasets/processed/prepare_data.py): Automated audit, perceptual duplicate filtering, and stratified 70/15/15 splitting pipeline.
-2. [`train_mobilenetv3.py`](file:///c:/Users/RIYA/OneDrive/Apps/Desktop/projects/eye_disease/Eye-Disease-Detection/train_mobilenetv3.py): End-to-end PyTorch training pipeline featuring 2-phase warmup/fine-tuning, class weighting, and test evaluation.
-3. [`reports/audit_summary.csv`](file:///c:/Users/RIYA/OneDrive/Apps/Desktop/projects/eye_disease/Eye-Disease-Detection/reports/audit_summary.csv): Summary metrics of raw vs clean data.
-4. [`reports/cross_class_conflicts.csv`](file:///c:/Users/RIYA/OneDrive/Apps/Desktop/projects/eye_disease/Eye-Disease-Detection/reports/cross_class_conflicts.csv): Complete log of the 456 excluded duplicate images.
-5. [`reports/split_distribution.csv`](file:///c:/Users/RIYA/OneDrive/Apps/Desktop/projects/eye_disease/Eye-Disease-Detection/reports/split_distribution.csv): Exact per-class split counts.
+1. [`datasets/processed/prepare_data.py`](file:///datasets/processed/prepare_data.py): Automated audit, perceptual duplicate filtering, and stratified 70/15/15 splitting pipeline.
+2. [`train_mobilenetv3.py`](file:///train_mobilenetv3.py): End-to-end PyTorch training pipeline featuring 2-phase warmup/fine-tuning, class weighting, and test evaluation.
+3. [`models/mobilenetv3_large_best.pt`](file:///models/mobilenetv3_large_best.pt): Best trained model checkpoint saved at Epoch 16.
+4. [`reports/mobilenetv3_test_report.txt`](file:///reports/mobilenetv3_test_report.txt): Complete classification metrics on 2,134 test images.
+5. [`reports/mobilenetv3_confusion_matrix.png`](file:///reports/mobilenetv3_confusion_matrix.png): Multi-class test confusion matrix plot.
+6. [`reports/mobilenetv3_learning_curves.png`](file:///reports/mobilenetv3_learning_curves.png): 2-phase loss and accuracy learning trajectory.
+7. [`reports/audit_summary.csv`](file:///reports/audit_summary.csv): Summary metrics of raw vs clean data.
+8. [`reports/cross_class_conflicts.csv`](file:///reports/cross_class_conflicts.csv): Complete log of the 456 excluded duplicate images.
+9. [`reports/split_distribution.csv`](file:///reports/split_distribution.csv): Exact per-class split counts.
 
 ---
 
