@@ -18,7 +18,7 @@ In this collaborative benchmark across 12 ocular conditions, each team member im
 | **Optimization Strategy** | 2-Phase Transfer Learning (3 Warmup Epochs + 20 Fine-Tuning Epochs) |
 | **Imbalance Mitigation** | Inverse-Frequency Class Weighted Cross-Entropy Loss |
 | **Optimizer & Scheduler** | AdamW ($\text{weight decay} = 10^{-4}$) with Cosine Annealing Learning Rate Decay |
-| **Pipeline Script** | [`train_efficientnetv2_s.py`](file:///c:/Users/Vidushi/Documents/SEM5/DEEP_LEARNING_SEM5/Project/Eye-Disease-Detection/train_efficientnetv2_s.py) |
+| **Pipeline Script** | [`train_efficientnetv2_s.py`](file:///train_efficientnetv2_s.py) |
 | **Checkpoint Path** | `models/efficientnetv2_s_best.pt` |
 
 ---
@@ -128,7 +128,7 @@ To prevent majority classes from dominating the cross-entropy gradients, we appl
 $$w_c = \frac{N_{\text{total}}}{K \cdot N_c}$$
 where $N_{\text{total}} = 9,943$, $K = 12$ (number of classes), and $N_c$ is the image count for class $c$.
 
-In [`train_efficientnetv2_s.py`](file:///c:/Users/Vidushi/Documents/SEM5/DEEP_LEARNING_SEM5/Project/Eye-Disease-Detection/train_efficientnetv2_s.py), this weight tensor is passed to PyTorch's loss function:
+In [`train_efficientnetv2_s.py`](file:///train_efficientnetv2_s.py), this weight tensor is passed to PyTorch's loss function:
 ```python
 criterion = nn.CrossEntropyLoss(weight=class_weights)
 ```
@@ -170,7 +170,7 @@ Model weights are saved to `models/efficientnetv2_s_best.pt` exclusively when th
 
 ## 6. Implementation Walkthrough (`train_efficientnetv2_s.py`)
 
-The complete training script is implemented in [`train_efficientnetv2_s.py`](file:///c:/Users/Vidushi/Documents/SEM5/DEEP_LEARNING_SEM5/Project/Eye-Disease-Detection/train_efficientnetv2_s.py).
+The complete training script is implemented in [`train_efficientnetv2_s.py`](file:///train_efficientnetv2_s.py).
 
 ### Core Components:
 1. **Reproducibility Guarantee**:
@@ -196,7 +196,7 @@ The complete training script is implemented in [`train_efficientnetv2_s.py`](fil
    - Confusion Matrix: `reports/efficientnetv2_s_confusion_matrix.png`
 
 ### Explainability Design Note (No Grad-CAM in Training Script)
-In accordance with clean software engineering practices and the explicit project instructions, [`train_efficientnetv2_s.py`](file:///c:/Users/Vidushi/Documents/SEM5/DEEP_LEARNING_SEM5/Project/Eye-Disease-Detection/train_efficientnetv2_s.py) focuses strictly on training and evaluation. Grad-CAM visualizers are kept in separate standalone scripts (e.g., `gradcam_custom_cnn.py`, `densenet_gradcam.py`), avoiding extraneous computational overhead and code clutter during model optimization.
+In accordance with clean software engineering practices and the explicit project instructions, [`train_efficientnetv2_s.py`](file:///train_efficientnetv2_s.py) focuses strictly on training and evaluation. Grad-CAM visualizers are kept in separate standalone scripts (e.g., `gradcam_custom_cnn.py`, `densenet_gradcam.py`), avoiding extraneous computational overhead and code clutter during model optimization.
 
 ---
 
@@ -214,17 +214,75 @@ python train_efficientnetv2_s.py
 
 ---
 
-## 8. Comparative Architecture Analysis
+## 8. Experimental Results & Test Evaluation
+
+The model was trained for 23 epochs across the two-phase schedule (3 warmup epochs with backbone frozen + 20 fine-tuning epochs with full backbone unfreezing and Cosine Annealing learning rate schedule). The optimal checkpoint was attained at **Epoch 23** with a **Validation Macro-F1 of 0.9314**.
+
+### 8.1 Overall Performance on Unseen Test Split (2,134 Images)
+
+EfficientNetV2-S achieved the **top performance across the entire benchmark suite**:
+
+| Evaluation Metric | Score | Clinical / Benchmark Significance |
+| :--- | :---: | :--- |
+| **Test Accuracy** | **93.96%** | **Highest overall accuracy** across all team architectures |
+| **Macro Precision** | **0.9330** | Superior precision, minimizing false positive clinical referrals |
+| **Macro Recall** | **0.9406** | **Highest sensitivity**, crucial for detecting sight-threatening conditions |
+| **Macro F1-Score** | **0.9363** | **Top macro harmonic score**, demonstrating balanced multi-class mastery |
+| **Weighted F1-Score** | **0.9392** | Robust performance across the true class distribution |
+
+### 8.2 Per-Class Performance Breakdown
+
+| Disease Class | Precision | Recall (Sensitivity) | F1-Score | Support (Test Images) |
+| :--- | :---: | :---: | :---: | :---: |
+| **Pinguecula** | 1.0000 | 1.0000 | **1.0000** | 55 |
+| **Xanthelasma** | 1.0000 | 1.0000 | **1.0000** | 186 |
+| **Pterygium** | 1.0000 | 0.9806 | **0.9902** | 258 |
+| **Stye** | 0.9688 | 0.9880 | **0.9783** | 251 |
+| **Cataract** | 0.9786 | 0.9703 | **0.9745** | 236 |
+| **Blepharitis** | 0.9505 | 0.9860 | **0.9679** | 214 |
+| **Healthy** | 0.9587 | 0.9766 | **0.9676** | 214 |
+| **Bacterial Conjunctivitis** | 0.9247 | 0.8940 | **0.9091** | 151 |
+| **Glaucoma** | 0.8806 | 0.9219 | **0.9008** | 64 |
+| **Uveitis** | 0.8409 | 0.9487 | **0.8916** | 78 |
+| **Viral Conjunctivitis** | 0.8750 | 0.8065 | **0.8393** | 217 |
+| **Allergic Conjunctivitis** | 0.8182 | 0.8143 | **0.8162** | 210 |
+
+### 8.3 Key Analytical Findings & Clinical Insights
+
+1. **Top Diagnostic Sensitivity on High-Risk Conditions**:
+   - **Glaucoma** achieved **92.19% recall** (0.9008 F1) and **Uveitis** achieved **94.87% recall** (0.8916 F1). Because both conditions can cause irreversible visual impairment if overlooked, this high recall directly fulfills our project's early-warning screening mission.
+2. **Flawless Discriminative Boundaries on Eyelid & Corneal Lesions**:
+   - **Pinguecula** (1.0000 F1) and **Xanthelasma** (1.0000 F1) achieved 100% precision and recall.
+   - **Pterygium** achieved **0.9902 F1** (1.0000 precision), successfully differentiating conjunctival growth from iris/pupil tissues.
+3. **Overcoming Red-Eye Ambiguity**:
+   - EfficientNetV2-S achieved the highest scores on the difficult conjunctival inflammation triad: **Bacterial** (0.9091 F1), **Viral** (0.8393 F1), and **Allergic** (0.8162 F1). The combination of Fused-MBConv texture extraction and Squeeze-and-Excitation attention enabled the network to detect subtle vascular engorgement patterns that lighter models conflated.
+
+### 8.4 Generated Artifacts & Deliverables
+
+| Output | Location | Description |
+| :--- | :--- | :--- |
+| **Best Model Weights** | `models/efficientnetv2_s_best.pt` | Saved weights with highest validation macro-F1 (Epoch 23, Val F1 = 0.9314) |
+| **Test Report** | `reports/efficientnetv2_s_test_report.txt` | Complete test classification report with precision, recall, and F1 |
+| **Confusion Matrix** | `reports/efficientnetv2_s_confusion_matrix.png` | 12×12 test set confusion matrix visualization |
+| **Learning Curves** | `reports/efficientnetv2_s_learning_curves.png` | 2-phase train vs validation loss and accuracy curves |
+| **Training Metrics** | `reports/efficientnetv2_s_training_metrics.csv` | Full epoch-by-epoch training history |
+
+---
+
+## 9. Comparative Architecture Analysis
 
 | Metric / Dimension | Custom EyeDiseaseCNN (Tejender) | MobileNetV3-Large (Riya) | DenseNet121 (Dev) | EfficientNetV2-S (Vidushi) |
 |---|---|---|---|---|
-| **Backbone Paradigm** | Vanilla 5-block CNN | Inverted Residuals + Hardswish | Dense Feature Concatenation | Fused-MBConv + MBConv + SE |
-| **Pretrained Weights** | None (Trained from scratch) | ImageNet-1K | ImageNet-1K | ImageNet-1K |
+| **Backbone Paradigm** | Vanilla 5-block CNN | Inverted Residuals + Hardswish | Dense Feature Concatenation | **Fused-MBConv + MBConv + SE** |
+| **Pretrained Weights** | None (Trained from scratch) | ImageNet-1K | ImageNet-1K | **ImageNet-1K** |
 | **Total Parameters** | ~983,000 | ~5,400,000 | ~7,000,000 | **~21,458,488** |
-| **Primary Advantage** | Transparent baseline, no pretraining bias | Extreme mobile/edge efficiency, low latency | Dense feature reuse, deep gradient paths | **High capacity, fused GPU kernels, fast convergence** |
-| **Input Resolution** | $224 \times 224$ | $224 \times 224$ | $224 \times 224$ | $224 \times 224$ |
+| **Test Accuracy** | 75.54% | 92.60% | 92.88% | **93.96% (Top)** |
+| **Macro Precision** | 0.7431 | 0.9212 | 0.9183 | **0.9330 (Top)** |
+| **Macro Recall** | 0.7703 | 0.9233 | 0.9276 | **0.9406 (Top)** |
+| **Macro F1-Score** | 0.7511 | 0.9220 | 0.9223 | **0.9363 (Top)** |
+| **Primary Advantage** | Transparent baseline, no pretraining bias | Extreme mobile/edge efficiency, low latency | Dense feature reuse, deep gradient paths | **Highest accuracy & sensitivity, multi-scale SE attention** |
 | **Training Epochs** | 25 | 23 (3 + 20) | 23 (3 + 20) | 23 (3 + 20) |
 | **Evaluation Set** | 2,134 test images | 2,134 test images | 2,134 test images | 2,134 test images |
 
 ### Summary & Takeaways
-EfficientNetV2-S represents the most parameter-rich and architecturally modern model in our comparative study. By combining early-stage Fused-MBConv layers for rapid GPU computation with late-stage Squeeze-and-Excitation attention blocks, it is positioned to deliver state-of-the-art representation fidelity on complex ocular surface diseases while maintaining an efficient training profile.
+EfficientNetV2-S achieved the highest classification accuracy and macro-F1 across the entire project. By pairing early-stage Fused-MBConv layers for rapid multi-scale feature synthesis with late-stage Squeeze-and-Excitation attention blocks, it delivers superior sensitivity on subtle ocular pathologies (such as Glaucoma, Uveitis, and Conjunctivitis variants) while scaling effectively on GPU hardware.

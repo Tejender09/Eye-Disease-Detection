@@ -143,6 +143,9 @@ Eye-Disease-Detection/
 │   ├── mobilenetv3_test_report.txt     # Test evaluation metrics for MobileNetV3
 │   ├── mobilenetv3_confusion_matrix.png # MobileNetV3 confusion matrix plot
 │   ├── mobilenetv3_learning_curves.png  # MobileNetV3 loss & accuracy curves
+│   ├── efficientnetv2_s_test_report.txt # Test evaluation metrics for EfficientNetV2-S
+│   ├── efficientnetv2_s_confusion_matrix.png # EfficientNetV2-S confusion matrix plot
+│   ├── efficientnetv2_s_learning_curves.png  # EfficientNetV2-S loss & accuracy curves
 │   └── gradcam_samples/           # Generated Grad-CAM overlays
 ├── DEVREADME.md                   # Dev's DenseNet121 documentation
 ├── RIYA_README.md                 # Riya's MobileNetV3 documentation
@@ -219,12 +222,12 @@ All models are evaluated on the exact same unseen test set of **2,134 images** a
 | **EyeDiseaseCNN (Custom Baseline)** | **None (From Scratch)** | **983,052** | **75.54%** | **0.7431** | **0.7703** | **0.7511** |
 | **MobileNetV3-Large (Riya)** | **ImageNet-1k** | **~5,400,000** | **92.60%** | **0.9212** | **0.9233** | **0.9220** |
 | **DenseNet121 (Dev)** | **ImageNet-1k** | **~7,000,000** | **92.88%** | **0.9183** | **0.9276** | **0.9223** |
-| **EfficientNetV2-S (Vidushi)** | **ImageNet-1k** | **~21,458,488** | *Ready for Training* | *Ready for Training* | *Ready for Training* | *Ready for Training* |
+| **EfficientNetV2-S (Vidushi)** | **ImageNet-1k** | **~21,458,488** | **93.96%** | **0.9330** | **0.9406** | **0.9363** |
 
 ### Observations:
-- **Baseline Efficiency**: The custom scratch baseline reaches **75.54% accuracy** with fewer than 1 million parameters, demonstrating that a compact, specialized convolutional network can learn ocular representations without pretraining.
-- **Edge Model Optimization (MobileNetV3-Large)**: MobileNetV3-Large achieves virtually identical macro-F1 to DenseNet121 (**0.9220 vs. 0.9223**) and **92.60% accuracy** while using ~23% fewer parameters, offering superior inference throughput and minimal latency suitable for on-device mobile diagnostics.
-- **Dense Feature-Reuse (DenseNet121)**: DenseNet121 reaches the highest overall accuracy (**92.88%**) and macro recall (**0.9276**), benefiting from dense skip connections that concatenate multi-level feature maps.
-- **Architecture Scaling (EfficientNetV2-S)**: EfficientNetV2-S provides the highest representation capacity (~21.5M parameters) with modern Fused-MBConv layers that maximize GPU compute density and training throughput.
-- **Top Recognized Categories**: All architectures achieve >95% F1 scores on conditions with distinct structural landmarks: *Pinguecula*, *Xanthelasma*, *Pterygium*, and *Cataract*.
-- **Clinical Ambiguity Area**: Across all models, differentiating between *Allergic Conjunctivitis* (~0.78 F1) and *Viral Conjunctivitis* (~0.83 F1) presents the most challenging classification boundary due to shared clinical signs of conjunctival redness and swelling.
+- **Top Overall Performance (EfficientNetV2-S)**: EfficientNetV2-S achieved the project's highest scores across all primary metrics (**93.96% accuracy**, **0.9406 macro recall**, and **0.9363 macro F1**). Its combination of early Fused-MBConv layers and late-stage Squeeze-and-Excitation attention enables optimal multi-scale feature extraction on subtle ocular lesions.
+- **Dense Feature-Reuse (DenseNet121)**: DenseNet121 achieves **92.88% accuracy** and **0.9223 macro F1**, benefiting from dense skip connections that concatenate multi-level feature maps across layers.
+- **Edge Model Optimization (MobileNetV3-Large)**: MobileNetV3-Large matches DenseNet121's macro-F1 (**0.9220 vs. 0.9223**) with **92.60% accuracy** while using ~23% fewer parameters, offering the lowest computational latency and making it the ideal candidate for on-device mobile screening.
+- **Baseline Efficiency (EyeDiseaseCNN)**: The custom baseline trained from scratch achieves **75.54% accuracy** with under 1 million parameters, proving that a transparent, non-pretrained convolutional network can capture the primary ocular pathology classes.
+- **Top Recognized Categories**: All transfer-learning architectures achieve >95% F1 scores on conditions with distinct structural landmarks: *Pinguecula*, *Xanthelasma*, *Pterygium*, and *Cataract*.
+- **Clinical Ambiguity Area**: Differentiating between *Allergic Conjunctivitis* and *Viral Conjunctivitis* remains the most challenging decision boundary across all models due to shared clinical signs of conjunctival injection and inflammation in standard photographic views.
