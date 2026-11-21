@@ -40,7 +40,7 @@ MODELS_DIR.mkdir(parents=True, exist_ok=True)
 REPORTS_DIR.mkdir(parents=True, exist_ok=True)
 
 IMAGE_SIZE = (224, 224)   # Standardized input resolution across the project
-BATCH_SIZE = 16           # EfficientNetV2-S has ~21.5M params; batch size 16 fits comfortably in GPU memory
+BATCH_SIZE = 32           # EfficientNetV2-S has ~21.5M params; batch size 16 fits comfortably in GPU memory
 NUM_WORKERS = 0           # Safe default for Windows multiprocessing compatibility
 RANDOM_SEED = 42          # Consistent deterministic seed matching team experiments
 
