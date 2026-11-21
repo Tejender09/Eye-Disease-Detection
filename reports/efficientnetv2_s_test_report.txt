@@ -1,0 +1,26 @@
+EfficientNetV2-S Test Evaluation Report
+=============================================
+Test Accuracy   : 93.96%
+Macro Precision : 0.9330
+Macro Recall    : 0.9406
+Macro F1-Score  : 0.9363
+
+Per-Class Classification Metrics:
+                          precision    recall  f1-score   support
+
+ Allergic Conjunctivitis     0.8182    0.8143    0.8162       210
+Bacterial Conjunctivitis     0.9247    0.8940    0.9091       151
+             Blepharitis     0.9505    0.9860    0.9679       214
+                Cataract     0.9786    0.9703    0.9745       236
+                Glaucoma     0.8806    0.9219    0.9008        64
+                 Healthy     0.9587    0.9766    0.9676       214
+              Pinguecula     1.0000    1.0000    1.0000        55
+               Pterygium     1.0000    0.9806    0.9902       258
+                    Stye     0.9688    0.9880    0.9783       251
+                 Uveitis     0.8409    0.9487    0.8916        78
+    Viral Conjunctivitis     0.8750    0.8065    0.8393       217
+             Xanthelasma     1.0000    1.0000    1.0000       186
+
+                accuracy                         0.9396      2134
+               macro avg     0.9330    0.9406    0.9363      2134
+            weighted avg     0.9395    0.9396    0.9392      2134
