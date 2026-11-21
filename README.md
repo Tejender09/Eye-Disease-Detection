@@ -124,13 +124,13 @@ Eye-Disease-Detection/
 │   ├── custom_cnn_best.pt         # Best Custom EyeDiseaseCNN weights (Epoch 23)
 │   ├── densenet121_best.pt        # Best DenseNet121 weights (Epoch 23)
 │   ├── mobilenetv3_large_best.pt  # Best MobileNetV3-Large weights (Epoch 16)
-│   └── efficientnetv2_s_best.pt   # Target checkpoint for EfficientNetV2-S
+│   └── efficientnetv2_s_best.pt   # Best EfficientNetV2-S weights (Epoch 23)
 ├── train_custom_cnn.py            # Custom EyeDiseaseCNN training script (Tejender)
-├── gradcam_custom_cnn.py          # Standalone Grad-CAM visualizer for Custom CNN
-├── Dev_train_densenet121.py       # DenseNet121 transfer learning pipeline (Dev)
-├── densenet_gradcam.py            # Standalone Grad-CAM visualizer for DenseNet121
 ├── train_mobilenetv3.py           # MobileNetV3-Large transfer learning pipeline (Riya)
+├── Dev_train_densenet121.py       # DenseNet121 transfer learning pipeline (Dev)
 ├── train_efficientnetv2_s.py      # EfficientNetV2-S transfer learning pipeline (Vidushi)
+├── gradcam.py                     # Centralized multi-model Grad-CAM & attribution engine
+├── app.py                         # Streamlit multi-model screening & explainability app
 ├── reports/
 │   ├── audit_summary.csv          # High-level pipeline metrics
 │   ├── split_distribution.csv     # Per-class split distribution
@@ -147,12 +147,20 @@ Eye-Disease-Detection/
 │   ├── efficientnetv2_s_confusion_matrix.png # EfficientNetV2-S confusion matrix plot
 │   ├── efficientnetv2_s_learning_curves.png  # EfficientNetV2-S loss & accuracy curves
 │   └── gradcam_samples/           # Generated Grad-CAM overlays
-├── DEVREADME.md                   # Dev's DenseNet121 documentation
-├── RIYA_README.md                 # Riya's MobileNetV3 documentation
-├── TejenderReadme.md              # Tejender's Custom CNN baseline documentation
-├── VidushiReadme.md               # Vidushi's EfficientNetV2-S documentation
-└── README.md                      # Project documentation and audit tracker
+├── docs/                          # Dedicated folder for individual contributor reports
+│   ├── DEVREADME.md               # Dev's DenseNet121 documentation
+│   ├── RIYA_README.md             # Riya's MobileNetV3 documentation
+│   ├── TejenderReadme.md          # Tejender's Custom CNN baseline documentation
+│   └── VidushiReadme.md           # Vidushi's EfficientNetV2-S documentation
+└── README.md                      # Primary project documentation and audit tracker
 ```
+
+### Team Contributor Documentation
+For detailed architecture analyses, training regimens, and contributor findings, refer to:
+- [Dev's DenseNet121 Documentation](docs/DEVREADME.md)
+- [Riya's MobileNetV3-Large Documentation](docs/RIYA_README.md)
+- [Tejender's Custom EyeDiseaseCNN Documentation](docs/TejenderReadme.md)
+- [Vidushi's EfficientNetV2-S Documentation](docs/VidushiReadme.md)
 
 ---
 
@@ -201,14 +209,23 @@ This executes:
 3. Phase 2 (20 Fine-Tuning Epochs) with full backbone unfrozen and Cosine Annealing learning rate schedule.
 4. Unseen test set evaluation, saving best weights to `models/efficientnetv2_s_best.pt` and metrics to `reports/`.
 
-### 6.6 Standalone Grad-CAM Visualizations
-Generate explainability heatmaps on test classes or a specific eye image:
+### 6.6 Centralized Multi-Model Grad-CAM Visualizations
+Generate explainability heatmaps for any single model or produce a 4-model comparative attribution figure:
 ```bash
-# Generate sample heatmaps for all 12 classes
-python gradcam_custom_cnn.py
+# 4-Model side-by-side comparison figure:
+python gradcam.py --model all --image "datasets/processed/test/Cataract/Cataract_00000.jpg"
 
-# Explain a specific test image
-python gradcam_custom_cnn.py --image "datasets/processed/test/Cataract/Cataract_00000.jpg"
+# Single-model Grad-CAM (e.g., EfficientNetV2-S or Custom CNN):
+python gradcam.py --model efficientnetv2_s --image "datasets/processed/test/Glaucoma/Glaucoma_00000.jpg"
+
+# Batch benchmark across all 12 classes:
+python gradcam.py --model efficientnetv2_s --benchmark
+```
+
+### 6.7 Launch the Interactive Multi-Model Web App
+Launch the Streamlit web dashboard to upload photos, run all 4 models simultaneously, view comparative diagnosis tables, and inspect Grad-CAM galleries:
+```bash
+streamlit run app.py
 ```
 
 ---
