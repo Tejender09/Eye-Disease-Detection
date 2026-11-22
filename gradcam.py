@@ -2,21 +2,10 @@
 ==========
 Centralized Grad-CAM and Diagnostic Engine for Eye Disease Detection.
 Supports all 4 project architectures:
-  1. custom_cnn        (EyeDiseaseCNN - Tejender, trained from scratch)
-  2. mobilenetv3       (MobileNetV3-Large - Riya, edge-optimized)
-  3. densenet121       (DenseNet121 - Dev, feature reuse)
-  4. efficientnetv2_s  (EfficientNetV2-S - Vidushi, high-capacity champion)
-
-Usage:
-------
-# 1. Generate Grad-CAM for a specific model:
-python gradcam.py --model efficientnetv2_s --image path/to/eye.jpg
-
-# 2. Generate side-by-side comparison across ALL 4 models:
-python gradcam.py --model all --image path/to/eye.jpg --out comparison.png
-
-# 3. Batch benchmark on test dataset:
-python gradcam.py --model custom_cnn --benchmark
+  1. custom_cnn
+  2. mobilenetv3
+  3. densenet121
+  4. efficientnetv2_s
 """
 
 import argparse
@@ -148,7 +137,6 @@ def load_model(model_name: str, checkpoint_path=None, device=None):
     model.to(device)
     model.eval()
 
-    # Disable inplace activations across all sub-modules for clean autograd view safety
     for mod in model.modules():
         if hasattr(mod, "inplace"):
             mod.inplace = False
@@ -175,7 +163,6 @@ def generate_gradcam(model, model_name: str, image_or_path, target_class=None, d
     if device is None:
         device = next(model.parameters()).device
 
-    # Handle input image
     if isinstance(image_or_path, (str, Path)):
         raw_image = Image.open(image_or_path).convert("RGB")
     elif isinstance(image_or_path, Image.Image):
@@ -190,7 +177,6 @@ def generate_gradcam(model, model_name: str, image_or_path, target_class=None, d
     model.zero_grad()
 
     if model_name == "densenet121":
-        # Hook-free DenseNet Grad-CAM (avoids inplace ReLU corruption on features.norm5)
         feats = model.features(input_tensor)
         feats.retain_grad()
         out = F.relu(feats)
@@ -207,13 +193,12 @@ def generate_gradcam(model, model_name: str, image_or_path, target_class=None, d
         cam = torch.clamp(cam, min=0).cpu().numpy()
 
     else:
-        # Hook-safe Grad-CAM for Custom CNN, MobileNetV3, and EfficientNetV2-S
         if model_name == "custom_cnn":
-            target_layer = model.features[-3]       # Final Conv2d(256, 256)
+            target_layer = model.features[-3]
         elif model_name == "mobilenetv3":
-            target_layer = model.features[-1][0]    # Final Conv2d in Conv2dNormActivation
+            target_layer = model.features[-1][0]
         elif model_name == "efficientnetv2_s":
-            target_layer = model.features[-1][0]    # Final Conv2d in Conv2dNormActivation
+            target_layer = model.features[-1][0]
         else:
             raise ValueError(f"Unsupported model: {model_name}")
 
@@ -245,14 +230,12 @@ def generate_gradcam(model, model_name: str, image_or_path, target_class=None, d
         cam = (weights * activations).sum(dim=1).squeeze()
         cam = torch.clamp(cam, min=0).cpu().numpy()
 
-    # Normalization
     max_val = np.max(cam)
     if max_val > 0:
         cam = cam / max_val
     else:
         cam = np.zeros_like(cam)
 
-    # Resize CAM to image size and create Jet overlay
     cam_pil = Image.fromarray(np.uint8(255 * cam)).resize((224, 224), Image.Resampling.BILINEAR)
     cam_resized = np.array(cam_pil) / 255.0
     heatmap = plt.cm.jet(cam_resized)[:, :, :3]
@@ -276,7 +259,6 @@ def generate_all_gradcam(models_dict, image_or_path, target_class=None, device=N
         pred_label = classes[pred_idx]
         confidence = float(probs[pred_idx])
 
-        # Top 3 differential diagnoses
         top3_indices = np.argsort(probs)[::-1][:3]
         top3 = [(classes[idx], float(probs[idx])) for idx in top3_indices]
 
@@ -414,7 +396,6 @@ def main():
         return
 
     if not args.image:
-        # Default to first Cataract sample if no image provided
         default_test_sample = TEST_DATASET_DIR / "Cataract" / "Cataract_00000.jpg"
         if default_test_sample.exists():
             args.image = str(default_test_sample)
@@ -427,7 +408,6 @@ def main():
         raise FileNotFoundError(f"Image not found: {image_path}")
 
     if args.model == "all":
-        # Load all 4 models and run side-by-side
         models_dict = {}
         for m_name in DEFAULT_CHECKPOINTS.keys():
             m_obj, classes = load_model(m_name, device=device)

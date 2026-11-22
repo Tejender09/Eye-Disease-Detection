@@ -6,11 +6,11 @@ import shutil
 from PIL import Image, ImageOps
 from collections import defaultdict
 
+
 # ---------------- CONFIGURATION ----------------
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
-# Support long paths on Windows with \\?\ prefix
 RAW_DIR = Path("\\\\?\\" + str((PROJECT_ROOT / "datasets" / "raw").resolve()))
 BACKUP_ZIP = PROJECT_ROOT / "Eye Dataset.v2-new-dataset.folder.zip"
 OUTPUT_DIR = Path("\\\\?\\" + str((PROJECT_ROOT / "datasets" / "processed").resolve()))
@@ -23,7 +23,6 @@ RANDOM_SEED = 42
 DEDUPLICATE_BEFORE_SPLIT = True
 FILTER_CROSS_CLASS_CONFLICTS = True
 
-# 70% Train, 15% Validation, 15% Test
 SPLIT_RATIOS = {
     "train": 0.70,
     "val": 0.15,
@@ -51,6 +50,7 @@ def compute_dhash(img, hash_size=8):
             diff.append(pixels[row_start + col] > pixels[row_start + col + 1])
     return sum([2 ** i for i, v in enumerate(diff) if v])
 
+
 # ---------------- BACKUP UTILITY ----------------
 
 def ensure_backup():
@@ -71,6 +71,7 @@ def discover_classes():
     if not classes:
         raise ValueError(f"No class folders found in {RAW_DIR}")
     return classes
+
 
 # ---------------- AUDIT RAW DATASET ----------------
 
@@ -125,10 +126,8 @@ def audit_raw_dataset(classes):
                     "error": str(error)
                 })
 
-    # Exact byte duplicate groups
     duplicate_groups = {h: paths for h, paths in hash_map.items() if len(paths) > 1}
 
-    # Cross-class perceptual duplicate detection
     cross_class_conflicts = []
     for p_hash, class_records_dict in dhash_map.items():
         if len(class_records_dict) > 1:
@@ -141,7 +140,6 @@ def audit_raw_dataset(classes):
 
     REPORT_DIR.mkdir(parents=True, exist_ok=True)
 
-    # Cross-class conflicts report
     with open(REPORT_DIR / "cross_class_conflicts.csv", "w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
         writer.writerow(["Perceptual Hash", "Assigned Class", "Conflicting Classes", "File Path"])
@@ -153,7 +151,6 @@ def audit_raw_dataset(classes):
                 clean_path(rec["path"])
             ])
 
-    # Exact Duplicates report
     with open(REPORT_DIR / "exact_duplicates.csv", "w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
         writer.writerow(["SHA256", "File Paths"])
@@ -161,7 +158,6 @@ def audit_raw_dataset(classes):
             cleaned_paths = [clean_path(p) for p in paths]
             writer.writerow([file_hash, " | ".join(cleaned_paths)])
 
-    # Dimensions report
     with open(REPORT_DIR / "image_dimensions.csv", "w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
         writer.writerow(["File", "Class", "Width", "Height", "Low Resolution"])
@@ -174,7 +170,6 @@ def audit_raw_dataset(classes):
                 record["width"] < MIN_WIDTH or record["height"] < MIN_HEIGHT
             ])
 
-    # Corrupted report
     with open(REPORT_DIR / "corrupted_images.csv", "w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=["path", "error"])
         writer.writeheader()
@@ -190,13 +185,12 @@ def audit_raw_dataset(classes):
 
     return records, corrupted, duplicate_groups, cross_class_conflicts
 
-# ---------------- PREPROCESSING & SPLITTING (70 / 15 / 15) ----------------
+# ---------------- PREPROCESSING & SPLITTING ----------------
 
 def preprocess_and_split(records, classes):
     print("\n========== PREPROCESSING & SPLITTING (70 / 15 / 15) ==========\n")
     random.seed(RANDOM_SEED)
 
-    # Clean / prepare output directories
     for split in ["train", "val", "test"]:
         for class_name in classes:
             split_dir = OUTPUT_DIR / split / class_name
@@ -207,7 +201,6 @@ def preprocess_and_split(records, classes):
                 except Exception:
                     pass
 
-    # Filter out cross-class duplicates and intra-class exact duplicates
     class_to_records = {c: [] for c in classes}
     seen_hashes = set()
     filtered_cross_count = 0
@@ -231,14 +224,12 @@ def preprocess_and_split(records, classes):
     processed_records = []
 
     for class_name, items in class_to_records.items():
-        # Deterministic shuffle
         items_copy = list(items)
         random.shuffle(items_copy)
 
         n_total = len(items_copy)
         n_train = int(round(n_total * SPLIT_RATIOS["train"]))
         n_val = int(round(n_total * SPLIT_RATIOS["val"]))
-        # Remaining goes to test to guarantee sum(splits) == n_total
         n_test = n_total - n_train - n_val
 
         splits_map = {
@@ -255,19 +246,15 @@ def preprocess_and_split(records, classes):
         for split_name, split_items in splits_map.items():
             for idx, item in enumerate(split_items):
                 src_path = item["path"]
-                # Save as standardized jpeg
                 safe_class = class_name.replace(" ", "_")
                 dest_filename = f"{safe_class}_{idx:05d}.jpg"
                 dest_path = OUTPUT_DIR / split_name / class_name / dest_filename
 
                 try:
                     with Image.open(src_path) as img:
-                        # Auto-orient EXIF tag if present
                         img = ImageOps.exif_transpose(img)
-                        # Ensure RGB 3-channel
                         if img.mode != "RGB":
                             img = img.convert("RGB")
-                        # High quality resize
                         img_resized = img.resize(IMAGE_SIZE, Image.Resampling.LANCZOS)
                         img_resized.save(dest_path, "JPEG", quality=95)
 
@@ -284,6 +271,7 @@ def preprocess_and_split(records, classes):
                     print(f"Error processing {src_path}: {err}")
 
     return split_counts, processed_records, filtered_cross_count
+
 
 # ---------------- POST-PREPROCESSING AUDIT ----------------
 
@@ -305,14 +293,13 @@ def audit_processed_dataset(classes, split_counts, processed_records, filtered_c
 
         print(f"Processed '{split}' split total: {total_split} images")
 
-    # Check for split leakage
+
     train_val_overlap = hash_set_by_split["train"].intersection(hash_set_by_split["val"])
     train_test_overlap = hash_set_by_split["train"].intersection(hash_set_by_split["test"])
     val_test_overlap = hash_set_by_split["val"].intersection(hash_set_by_split["test"])
 
     leakage_count = len(train_val_overlap) + len(train_test_overlap) + len(val_test_overlap)
 
-    # Save split distribution summary
     split_csv_path = REPORT_DIR / "split_distribution.csv"
     with open(split_csv_path, "w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
@@ -327,7 +314,7 @@ def audit_processed_dataset(classes, split_counts, processed_records, filtered_c
             te_pct = f"{(te/tot)*100:.1f}%" if tot else "0%"
             writer.writerow([c, tr, va, te, tot, tr_pct, va_pct, te_pct])
 
-    # Save overall audit summary
+
     summary_csv_path = REPORT_DIR / "audit_summary.csv"
     with open(summary_csv_path, "w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
@@ -347,6 +334,7 @@ def audit_processed_dataset(classes, split_counts, processed_records, filtered_c
     else:
         print(f"\nAudit warning: Duplicate leakage detected between splits (Leakage count: {leakage_count}).")
     print(f"Detailed reports updated in: {REPORT_DIR}")
+
 
 # ---------------- MAIN ----------------
 

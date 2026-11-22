@@ -23,8 +23,6 @@ from torchvision.models import DenseNet121_Weights
 from sklearn.metrics import classification_report, confusion_matrix, f1_score, recall_score, precision_score
 
 # ---------------- CONFIGURATION ----------------
-# All paths are resolved relative to this file so the script works from any
-# working directory.
 
 PROJECT_ROOT = Path(__file__).resolve().parent
 DATASET_DIR = PROJECT_ROOT / "datasets" / "processed"
@@ -38,12 +36,12 @@ REPORTS_DIR = PROJECT_ROOT / "reports"
 MODELS_DIR.mkdir(parents=True, exist_ok=True)
 REPORTS_DIR.mkdir(parents=True, exist_ok=True)
 
-IMAGE_SIZE = (224, 224)   # Same as Riya
-BATCH_SIZE = 32           # Try 32 first; drop to 16 if CUDA OOM (see note below)
-NUM_WORKERS = 0           # Safe default on Windows (same as Riya)
-RANDOM_SEED = 42          # Same seed Riya used
+IMAGE_SIZE = (224, 224)
+BATCH_SIZE = 32  # Batch size
+NUM_WORKERS = 0
+RANDOM_SEED = 42
 
-# Training hyperparameters — identical to Riya's
+# Training Hyperparameters
 WARMUP_EPOCHS    = 3
 FINE_TUNE_EPOCHS = 20
 TOTAL_EPOCHS     = WARMUP_EPOCHS + FINE_TUNE_EPOCHS
@@ -52,20 +50,12 @@ WARMUP_LR    = 1e-3
 FINE_TUNE_LR = 1e-4
 WEIGHT_DECAY = 1e-4
 
-# Lock down randomness for reproducibility
 torch.manual_seed(RANDOM_SEED)
 np.random.seed(RANDOM_SEED)
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-# NOTE ON BATCH SIZE:
-# DenseNet121 is heavier than MobileNetV3-Large (~7M vs ~5M params, but dense
-# skip-connections keep more activations alive in memory).
-# If you hit a CUDA OOM error on the RTX 3050 6GB, change BATCH_SIZE to 16
-# above and re-run.  Everything else stays the same.
-
 # ---------------- DATASET & TRANSFORMS ----------------
-# Identical to Riya's EyeDataset — same custom loader, same glob pattern.
 
 class EyeDataset(Dataset):
     """Custom dataset that loads 224x224 RGB images from class-named subfolders."""
@@ -94,12 +84,7 @@ class EyeDataset(Dataset):
 
 
 def get_data_transforms():
-    """Return train and eval transform pipelines.
-
-    Train: resize → random flip → random rotation → color jitter → tensor → normalize.
-    Eval : resize → tensor → normalize.
-    Both use ImageNet mean/std — identical to Riya's setup.
-    """
+    """Return train and eval transform pipelines."""
     norm_mean = [0.485, 0.456, 0.406]
     norm_std  = [0.229, 0.224, 0.225]
 
@@ -122,14 +107,9 @@ def get_data_transforms():
 
 
 # ---------------- CLASS WEIGHT COMPUTATION ----------------
-# Inverse-frequency weighting, identical formula to Riya's.
 
 def compute_class_weights(train_dataset):
-    """Compute per-class weights: total / (num_classes * count).
-
-    This penalises misclassifications on minority classes (e.g. Pinguecula,
-    Glaucoma) which are heavily under-represented in the training set.
-    """
+    """Compute per-class weights: total / (num_classes * count)."""
     class_counts = np.zeros(len(train_dataset.classes), dtype=np.float32)
     for _, label in train_dataset.samples:
         class_counts[label] += 1
@@ -149,24 +129,11 @@ def compute_class_weights(train_dataset):
 # ---------------- MODEL CREATION (DenseNet121) ----------------
 
 def build_densenet121(num_classes):
-    """Load pretrained DenseNet121 and swap the classifier head.
-
-    DenseNet121's default head is a single Linear(1024 -> 1000) with no
-    dropout.  Riya's MobileNetV3 head included Dropout(0.2) before the final
-    Linear, so we add the same here to keep regularisation consistent across
-    both models.
-
-    Replaced head:
-        Sequential(
-            Dropout(p=0.2),
-            Linear(in_features=1024, out_features=num_classes)
-        )
-    """
+    """Load pretrained DenseNet121 and configure the classifier head."""
     weights = DenseNet121_Weights.DEFAULT
     model = models.densenet121(weights=weights)
 
-    # DenseNet121 classifier: Linear(in_features=1024, out_features=1000)
-    in_features = model.classifier.in_features  # 1024
+    in_features = model.classifier.in_features
     model.classifier = nn.Sequential(
         nn.Dropout(p=0.2),
         nn.Linear(in_features, num_classes),
@@ -176,11 +143,7 @@ def build_densenet121(num_classes):
 
 
 def freeze_backbone(model):
-    """Phase 1: freeze model.features, leave model.classifier trainable.
-
-    This mirrors Riya's approach exactly — she froze model.features on
-    MobileNetV3 and kept only the classifier head live during warmup.
-    """
+    """Phase 1: freeze model.features, leave model.classifier trainable."""
     for param in model.features.parameters():
         param.requires_grad = False
     for param in model.classifier.parameters():
@@ -188,18 +151,12 @@ def freeze_backbone(model):
 
 
 def unfreeze_backbone(model):
-    """Phase 2: unfreeze every parameter in the model.
-
-    Same scope as Riya — she unfroze all of model.parameters() for fine-tuning,
-    not just the last dense block.  Using the full model lets the dense skip
-    connections adapt end-to-end to the medical domain.
-    """
+    """Phase 2: unfreeze every parameter in the model."""
     for param in model.parameters():
         param.requires_grad = True
 
 
 # ---------------- TRAINING & EVALUATION FUNCTIONS ----------------
-# Identical logic to Riya's train_one_epoch and evaluate functions.
 
 def train_one_epoch(model, dataloader, criterion, optimizer):
     model.train()
@@ -277,19 +234,14 @@ def main():
     val_loader   = DataLoader(val_dataset,   batch_size=BATCH_SIZE, shuffle=False, num_workers=NUM_WORKERS)
     test_loader  = DataLoader(test_dataset,  batch_size=BATCH_SIZE, shuffle=False, num_workers=NUM_WORKERS)
 
-    # Build class-weighted loss to handle the imbalanced dataset
     class_weights = compute_class_weights(train_dataset)
     criterion     = nn.CrossEntropyLoss(weight=class_weights)
 
-    # Build model and move to GPU/CPU
     model = build_densenet121(num_classes=len(train_dataset.classes)).to(DEVICE)
 
     best_model_path = MODELS_DIR / "densenet121_best.pt"
 
     # ---------------- PHASE 1: WARMUP (3 EPOCHS) ----------------
-    # Backbone (model.features) is frozen; only the new classifier head trains.
-    # This warms up the randomly initialised head without corrupting pretrained
-    # feature weights.
     print("\n------------------------------------------------------------")
     print(f"PHASE 1: Warmup Training ({WARMUP_EPOCHS} Epochs - Backbone Frozen)")
     print("------------------------------------------------------------")
@@ -328,9 +280,6 @@ def main():
         })
 
     # ---------------- PHASE 2: FINE-TUNING (20 EPOCHS) ----------------
-    # Unfreeze the full model and train end-to-end with a lower LR that decays
-    # via cosine annealing down to 1e-6.  This allows the dense skip connections
-    # to adapt to the medical image domain.
     print("\n------------------------------------------------------------")
     print(f"PHASE 2: Fine-Tuning ({FINE_TUNE_EPOCHS} Epochs - Full Backbone Unfrozen)")
     print("------------------------------------------------------------")
@@ -364,7 +313,6 @@ def main():
             "val_recall": val_recall,
         })
 
-        # Save checkpoint whenever validation macro F1 improves
         if val_f1 > best_val_f1:
             best_val_f1 = val_f1
             torch.save({
@@ -383,7 +331,6 @@ def main():
         writer.writerows(history)
     print(f"\nTraining history saved to {metrics_csv}")
 
-    # Plot loss and accuracy curves, with a vertical line marking warmup end
     epochs_list = [h["epoch"] for h in history]
     plt.figure(figsize=(12, 5))
 
@@ -433,7 +380,6 @@ def main():
         f.write(f"Test Accuracy: {test_acc*100:.2f}%\nMacro F1: {test_f1:.4f}\n\n")
         f.write(cls_report)
 
-    # Confusion matrix heatmap
     cm = confusion_matrix(y_true, y_pred)
     plt.figure(figsize=(10, 8))
     sns.heatmap(cm, annot=True, fmt="d", cmap="Blues",

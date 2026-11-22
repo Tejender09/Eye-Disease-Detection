@@ -41,7 +41,7 @@ REPORTS_DIR.mkdir(parents=True, exist_ok=True)
 GRADCAM_DIR.mkdir(parents=True, exist_ok=True)
 
 IMAGE_SIZE = (224, 224)
-BATCH_SIZE = 32
+BATCH_SIZE = 32  # Batch size
 NUM_WORKERS = 0
 RANDOM_SEED = 42
 EPOCHS = 25

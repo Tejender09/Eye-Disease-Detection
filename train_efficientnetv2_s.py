@@ -22,10 +22,8 @@ from torchvision.models import EfficientNet_V2_S_Weights
 
 from sklearn.metrics import classification_report, confusion_matrix, f1_score, recall_score, precision_score
 
-# ==============================================================================
 # CONFIGURATION & HYPERPARAMETERS
-# ==============================================================================
-# All paths resolve relative to this script for portability across working environments.
+
 
 PROJECT_ROOT = Path(__file__).resolve().parent
 DATASET_DIR = PROJECT_ROOT / "datasets" / "processed"
@@ -39,21 +37,20 @@ REPORTS_DIR = PROJECT_ROOT / "reports"
 MODELS_DIR.mkdir(parents=True, exist_ok=True)
 REPORTS_DIR.mkdir(parents=True, exist_ok=True)
 
-IMAGE_SIZE = (224, 224)   # Standardized input resolution across the project
-BATCH_SIZE = 32           # EfficientNetV2-S has ~21.5M params; batch size 16 fits comfortably in GPU memory
-NUM_WORKERS = 0           # Safe default for Windows multiprocessing compatibility
-RANDOM_SEED = 42          # Consistent deterministic seed matching team experiments
+IMAGE_SIZE = (224, 224)
+BATCH_SIZE = 32  # Batch size
+NUM_WORKERS = 0
+RANDOM_SEED = 42
 
-# Two-Phase Transfer Learning Hyperparameters
+# Training Hyperparameters
 WARMUP_EPOCHS = 3
 FINE_TUNE_EPOCHS = 20
 TOTAL_EPOCHS = WARMUP_EPOCHS + FINE_TUNE_EPOCHS
 
-WARMUP_LR = 1e-3          # Learning rate for classifier head warmup
-FINE_TUNE_LR = 1e-4       # Learning rate for fine-tuning entire backbone
-WEIGHT_DECAY = 1e-4       # Regularization penalty for AdamW
+WARMUP_LR = 1e-3
+FINE_TUNE_LR = 1e-4
+WEIGHT_DECAY = 1e-4
 
-# Seed control for strict reproducibility
 torch.manual_seed(RANDOM_SEED)
 np.random.seed(RANDOM_SEED)
 if torch.cuda.is_available():
@@ -160,9 +157,6 @@ def build_efficientnetv2_s(num_classes):
     weights = EfficientNet_V2_S_Weights.DEFAULT
     model = models.efficientnet_v2_s(weights=weights)
 
-    # In torchvision's EfficientNetV2-S, classifier is:
-    # (0): Dropout(p=0.2, inplace=True)
-    # (1): Linear(in_features=1280, out_features=1000, bias=True)
     in_features = model.classifier[1].in_features
     model.classifier[1] = nn.Linear(in_features, num_classes)
 
@@ -248,7 +242,7 @@ def evaluate(model, dataloader, criterion):
 
 def main():
     print("=" * 65)
-    print("  EfficientNetV2-S Training Pipeline (Vidushi's Contribution)")
+    print("  EfficientNetV2-S Training Pipeline")
     print(f"  Target Device: {DEVICE}")
     print("=" * 65 + "\n")
 
@@ -268,11 +262,9 @@ def main():
     val_loader = DataLoader(val_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=NUM_WORKERS)
     test_loader = DataLoader(test_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=NUM_WORKERS)
 
-    # Class-weighted loss computation
     class_weights = compute_class_weights(train_dataset)
     criterion = nn.CrossEntropyLoss(weight=class_weights)
 
-    # Instantiate EfficientNetV2-S
     model = build_efficientnetv2_s(num_classes=len(train_dataset.classes)).to(DEVICE)
     total_params = sum(p.numel() for p in model.parameters())
     print(f"\nEfficientNetV2-S initialized with {total_params:,} total parameters.")
@@ -348,7 +340,6 @@ def main():
             "val_precision": val_precision
         })
 
-        # Save checkpoint whenever Validation Macro F1 improves
         if val_f1 > best_val_f1:
             best_val_f1 = val_f1
             torch.save({
@@ -369,7 +360,6 @@ def main():
         writer.writerows(history)
     print(f"\nTraining metrics saved to {metrics_csv}")
 
-    # Generate Learning Curves Plot
     epochs = [h["epoch"] for h in history]
     plt.figure(figsize=(12, 5))
 
@@ -431,7 +421,6 @@ def main():
         f.write(cls_report)
     print(f"Test report saved to {test_report_path}")
 
-    # Generate Confusion Matrix
     cm = confusion_matrix(y_true, y_pred)
     plt.figure(figsize=(10, 8))
     sns.heatmap(cm, annot=True, fmt="d", cmap="Purples",

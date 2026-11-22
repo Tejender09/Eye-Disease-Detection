@@ -36,8 +36,8 @@ MODELS_DIR.mkdir(parents=True, exist_ok=True)
 REPORTS_DIR.mkdir(parents=True, exist_ok=True)
 
 IMAGE_SIZE = (224, 224)
-BATCH_SIZE = 32
-NUM_WORKERS = 0  # Safe default on Windows
+BATCH_SIZE = 32  # Batch size
+NUM_WORKERS = 0
 RANDOM_SEED = 42
 
 # Training Hyperparameters
@@ -49,7 +49,6 @@ WARMUP_LR = 1e-3
 FINE_TUNE_LR = 1e-4
 WEIGHT_DECAY = 1e-4
 
-# Deterministic seeding
 torch.manual_seed(RANDOM_SEED)
 np.random.seed(RANDOM_SEED)
 
@@ -83,7 +82,6 @@ class EyeDataset(Dataset):
         return image, label, path
 
 def get_data_transforms():
-    # Normalization according to ImageNet standard
     norm_mean = [0.485, 0.456, 0.406]
     norm_std = [0.229, 0.224, 0.225]
 
@@ -115,7 +113,6 @@ def compute_class_weights(train_dataset):
     total_samples = len(train_dataset)
     num_classes = len(train_dataset.classes)
     
-    # Balanced weighting: total / (num_classes * count)
     weights = total_samples / (num_classes * class_counts)
     
     print("\nCalculated Class Weights for Training:")
@@ -131,11 +128,6 @@ def build_mobilenetv3(num_classes):
     weights = MobileNet_V3_Large_Weights.DEFAULT
     model = models.mobilenet_v3_large(weights=weights)
     
-    # The default classifier in mobilenet_v3_large:
-    # (0): Linear(in_features=960, out_features=1280, bias=True)
-    # (1): Hardswish()
-    # (2): Dropout(p=0.2, inplace=True)
-    # (3): Linear(in_features=1280, out_features=1000, bias=True)
     in_features = model.classifier[3].in_features
     model.classifier[3] = nn.Linear(in_features, num_classes)
     
@@ -208,10 +200,10 @@ def evaluate(model, dataloader, criterion):
 # ---------------- MAIN TRAINING PIPELINE ----------------
 
 def main():
-    print(f"============================================================")
-    print(f"  MobileNetV3-Large Training Pipeline (Riya's Contribution) ")
+    print("============================================================")
+    print("  MobileNetV3-Large Training Pipeline")
     print(f"  Target Device: {DEVICE}")
-    print(f"============================================================\n")
+    print("============================================================\n")
 
     train_transform, eval_transform = get_data_transforms()
 
@@ -229,11 +221,9 @@ def main():
     val_loader = DataLoader(val_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=NUM_WORKERS)
     test_loader = DataLoader(test_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=NUM_WORKERS)
 
-    # Calculate class-weighted loss
     class_weights = compute_class_weights(train_dataset)
     criterion = nn.CrossEntropyLoss(weight=class_weights)
 
-    # Build model
     model = build_mobilenetv3(num_classes=len(train_dataset.classes)).to(DEVICE)
 
     # ---------------- PHASE 1: WARMUP (3 EPOCHS) ----------------
@@ -301,7 +291,6 @@ def main():
             "val_recall": val_recall
         })
 
-        # Checkpoint based on Validation Macro F1
         if val_f1 > best_val_f1:
             best_val_f1 = val_f1
             torch.save({
@@ -320,7 +309,6 @@ def main():
         writer.writerows(history)
     print(f"\nTraining history saved to {metrics_csv}")
 
-    # Plot training curves
     epochs = [h["epoch"] for h in history]
     plt.figure(figsize=(12, 5))
     
@@ -370,7 +358,6 @@ def main():
         f.write(f"Test Accuracy: {test_acc*100:.2f}%\nMacro F1: {test_f1:.4f}\n\n")
         f.write(cls_report)
 
-    # Confusion matrix
     cm = confusion_matrix(y_true, y_pred)
     plt.figure(figsize=(10, 8))
     sns.heatmap(cm, annot=True, fmt="d", cmap="Blues", 

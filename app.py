@@ -2,7 +2,7 @@
 ======
 Interactive Multi-Model Eye Disease Screening & Interpretability Dashboard.
 Allows clinicians and researchers to:
-  1. Upload ocular photographs or load benchmark test samples.
+  1. Upload ocular photographs for screening.
   2. Execute simultaneous diagnostic inference across all 4 trained models.
   3. Inspect a real-time comparison table with differential diagnoses and confidence scores.
   4. View the primary diagnosis announced by the project champion (EfficientNetV2-S).
@@ -33,7 +33,7 @@ from gradcam import (
 
 st.set_page_config(
     page_title="Ocular AI | Multi-Model Eye Disease Screening",
-    page_icon="👁️",
+    page_icon="https://img.icons8.com/fluency/96/visible.png",
     layout="wide",
     initial_sidebar_state="expanded",
 )
@@ -42,42 +42,117 @@ st.set_page_config(
 st.markdown(
     """
     <style>
+    .stApp {
+        background-color: #FFFFFF !important;
+        color: #0F172A !important;
+    }
+    [data-testid="stSidebar"] {
+        background-color: #F8FAFC !important;
+        border-right: 1px solid #E2E8F0 !important;
+    }
+    .header-container {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        margin-bottom: 0.3rem;
+    }
     .main-title {
-        font-size: 2.2rem;
-        font-weight: 700;
+        font-size: 2.1rem;
+        font-weight: 800;
         color: #1E3A8A;
-        margin-bottom: 0.2rem;
+        letter-spacing: -0.02em;
+        margin: 0;
     }
     .sub-title {
-        font-size: 1.05rem;
-        color: #4B5563;
+        font-size: 1.02rem;
+        color: #475569;
         margin-bottom: 1.2rem;
+        font-weight: 400;
     }
     .disclaimer-box {
-        background-color: #FEF3C7;
-        border-left: 5px solid #F59E0B;
-        padding: 0.8rem 1rem;
-        border-radius: 4px;
-        color: #92400E;
+        background-color: #FFCCCB ;
+        border-left: 4px solid #FF0000;
+        padding: 0.85rem 1.1rem;
+        border-radius: 6px;
+        color: #FF0000 ;
         font-size: 0.9rem;
         margin-bottom: 1.5rem;
+        border-top: 1px solid #FFCDD2;
+        border-right: 1px solid #FFCDD2;
+        border-bottom: 1px solid #FFCDD2;
     }
     .champion-card {
-        background: linear-gradient(135deg, #EFF6FF 0%, #DBEAFE 100%);
-        border: 2px solid #3B82F6;
-        border-radius: 10px;
-        padding: 1.2rem;
+        background: linear-gradient(135deg, #F0F7FF 0%, #E0EDFD 100%);
+        border: 2px solid #2563EB;
+        border-radius: 12px;
+        padding: 1.4rem;
         margin-bottom: 1.5rem;
+        box-shadow: 0 4px 14px rgba(37, 99, 235, 0.08);
     }
     .metric-badge {
-        display: inline-block;
-        padding: 0.2rem 0.6rem;
-        border-radius: 4px;
+        display: inline-flex;
+        align-items: center;
+        padding: 0.3rem 0.75rem;
+        border-radius: 6px;
         font-size: 0.85rem;
+        font-weight: 700;
+        background-color: #DBEAFE;
+        color: #1D4ED8;
+        border: 1px solid #BFDBFE;
+    }
+    .section-header {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 1.3rem;
+        font-weight: 700;
+        color: #1E3A8A;
+        margin-top: 1.2rem;
+        margin-bottom: 0.8rem;
+    }
+    .tip-card {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        background-color: #F8FAFC;
+        border: 1px solid #E2E8F0;
+        border-left: 4px solid #3B82F6;
+        border-radius: 6px;
+        padding: 0.75rem 1rem;
+        font-size: 0.88rem;
+        color: #334155;
+        margin-top: 1rem;
+    }
+    .model-header-tag {
+        color: #1E3A8A;
+        font-weight: 700;
+        font-size: 1rem;
+        margin-top: 0.5rem;
+        margin-bottom: 0.2rem;
+    }
+    .champion-pill {
+        background-color: #2563EB;
+        color: #FFFFFF;
+        font-size: 0.72rem;
+        font-weight: 700;
+        padding: 0.15rem 0.45rem;
+        border-radius: 4px;
+        margin-left: 6px;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+    }
+    div.stButton > button:first-child {
+        background: linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%);
+        color: #FFFFFF;
         font-weight: 600;
-        background-color: #E0E7FF;
-        color: #3730A3;
-        margin-right: 0.5rem;
+        border: none;
+        border-radius: 8px;
+        padding: 0.6rem 1.2rem;
+        box-shadow: 0 2px 6px rgba(37, 99, 235, 0.25);
+    }
+    div.stButton > button:first-child:hover {
+        background: linear-gradient(135deg, #1D4ED8 0%, #1E40AF 100%);
+        box-shadow: 0 4px 10px rgba(37, 99, 235, 0.35);
     }
     </style>
     """,
@@ -85,7 +160,6 @@ st.markdown(
 )
 
 PROJECT_ROOT = Path(__file__).resolve().parent
-TEST_DIR = PROJECT_ROOT / "datasets" / "processed" / "test"
 
 MODEL_METRICS = {
     "custom_cnn": {
@@ -144,45 +218,42 @@ def get_all_models():
 # -----------------------------------------------------------------------------
 
 with st.sidebar:
-    st.image("https://img.icons8.com/fluency/96/visible.png", width=64)
-    st.title("Screening Controls")
+    st.markdown(
+        """
+        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px; padding: 4px 0;">
+            <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#2563EB" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/>
+                <circle cx="12" cy="12" r="3" fill="#DBEAFE"/>
+                <circle cx="12" cy="12" r="1.2" fill="#1D4ED8"/>
+            </svg>
+            <span style="font-size: 1.35rem; font-weight: 800; color: #1E3A8A; letter-spacing: -0.01em;">Ocular AI</span>
+        </div>
+        <div style="font-size: 0.95rem; font-weight: 700; color: #1E40AF; margin-bottom: 8px;">Screening Controls</div>
+        """,
+        unsafe_allow_html=True,
+    )
     
-    # Load Models
     models_dict, device = get_all_models()
-    device_label = "🟢 NVIDIA CUDA GPU" if device.type == "cuda" else "🟡 CPU (Standard)"
-    st.caption(f"Inference Device: **{device_label}**")
 
     st.markdown("---")
     st.subheader("Select Input Source")
-    input_mode = st.radio("Choose image source:", ["Benchmark Test Samples", "Upload Custom Image"])
+    input_mode = st.radio(
+        "Choose image source:",
+        ["Upload Custom Image"],
+        index=0,
+    )
+
+    uploaded_file = st.file_uploader(
+        "Upload an external eye photograph (JPG, JPEG, PNG):",
+        type=["jpg", "jpeg", "png"],
+    )
 
     selected_image = None
     image_title = None
 
-    if input_mode == "Benchmark Test Samples":
-        # Scan test folder
-        if TEST_DIR.exists():
-            available_classes = sorted([d.name for d in TEST_DIR.iterdir() if d.is_dir()])
-            chosen_class = st.selectbox("Select Disease Class:", available_classes, index=3) # Cataract default
-            class_folder = TEST_DIR / chosen_class
-            samples = sorted(list(class_folder.glob("*.jpg")))
-            if samples:
-                sample_names = [s.name for s in samples[:15]]
-                chosen_sample = st.selectbox("Select Sample Image:", sample_names)
-                sample_path = class_folder / chosen_sample
-                selected_image = Image.open(sample_path).convert("RGB")
-                image_title = f"{chosen_class} ({chosen_sample})"
-        else:
-            st.warning("Processed test dataset directory not found locally.")
-
-    else:
-        uploaded_file = st.file_uploader(
-            "Upload an external eye photograph (JPG, JPEG, PNG):",
-            type=["jpg", "jpeg", "png"]
-        )
-        if uploaded_file is not None:
-            selected_image = Image.open(uploaded_file).convert("RGB")
-            image_title = uploaded_file.name
+    if uploaded_file is not None:
+        selected_image = Image.open(uploaded_file).convert("RGB")
+        image_title = uploaded_file.name
 
     st.markdown("---")
     st.subheader("Benchmark Specifications")
@@ -201,7 +272,23 @@ with st.sidebar:
 # MAIN APP VIEWPORT
 # -----------------------------------------------------------------------------
 
-st.markdown('<div class="main-title">👁️ Ocular AI: Multi-Model Screening & Explainability</div>', unsafe_allow_html=True)
+st.markdown(
+    """
+    <div class="header-container">
+        <svg width="42" height="42" viewBox="0 0 24 24" fill="none" stroke="#2563EB" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0;">
+            <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/>
+            <circle cx="12" cy="12" r="3.2" fill="#DBEAFE"/>
+            <circle cx="12" cy="12" r="1.3" fill="#1D4ED8"/>
+            <path d="M12 2v2"/>
+            <path d="M12 20v2"/>
+            <path d="M2 12h2"/>
+            <path d="M20 12h2"/>
+        </svg>
+        <h1 class="main-title">Ocular AI: Multi-Model Screening & Explainability</h1>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
 st.markdown(
     '<div class="sub-title">Simultaneous 4-Model Clinical Inference, Comparative Metrics & Grad-CAM Anatomical Attribution</div>',
     unsafe_allow_html=True,
@@ -210,7 +297,13 @@ st.markdown(
 st.markdown(
     """
     <div class="disclaimer-box">
-        <strong>⚠️ Clinical Screening Notice:</strong> This deep learning platform is built for educational, academic, and research benchmarking. 
+        <div style="display:flex; align-items:center; gap:8px; margin-bottom:4px; font-weight:700;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#FF0000" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+            </svg>
+            <span>Clinical Screening Notice</span>
+        </div>
+        This deep learning platform is built for educational, academic, and research benchmarking. 
         It does not replace professional ophthalmic diagnosis, slit-lamp biomicroscopy, or dilated fundus examination by a certified eye care professional.
     </div>
     """,
@@ -218,10 +311,9 @@ st.markdown(
 )
 
 if selected_image is None:
-    st.info("👈 Please select a sample from the sidebar or upload an eye photograph to begin diagnostic evaluation.")
+    st.info("Please upload an eye photograph (JPG, JPEG, PNG) in the sidebar to begin diagnostic evaluation.")
     st.stop()
 
-# Layout: Preview Image & Trigger
 col_preview, col_action = st.columns([1, 2])
 with col_preview:
     st.image(selected_image, caption=f"Active Image: {image_title}", use_container_width=True)
@@ -232,7 +324,7 @@ with col_action:
         "Click the button below to stream the image through all 4 architectures concurrently: "
         "**Custom EyeDiseaseCNN**, **MobileNetV3-Large**, **DenseNet121**, and **EfficientNetV2-S**."
     )
-    run_button = st.button("🚀 Run Multi-Model Diagnostic & Grad-CAM", type="primary", use_container_width=True)
+    run_button = st.button("Run Multi-Model Diagnostic & Grad-CAM", type="primary", use_container_width=True)
 
 if run_button or "last_results" in st.session_state:
     if run_button:
@@ -276,27 +368,35 @@ if run_button or "last_results" in st.session_state:
     total_models = len(predictions)
 
     if consensus_count == total_models:
-        consensus_text = f"🌟 Unanimous Agreement ({consensus_count}/{total_models} Models Agree)"
-        consensus_color = "#059669"
+        consensus_text = f"Unanimous Agreement ({consensus_count}/{total_models} Models Agree)"
+        consensus_color = "#047857"
     elif consensus_count >= 3:
-        consensus_text = f"✅ Strong Majority Consensus ({consensus_count}/{total_models} Models Agree)"
-        consensus_color = "#2563EB"
+        consensus_text = f"Majority Consensus ({consensus_count}/{total_models} Models Agree)"
+        consensus_color = "#1D4ED8"
     else:
-        consensus_text = f"⚠️ Split Diagnostic Opinions ({consensus_count}/{total_models} Models Agree)"
-        consensus_color = "#D97706"
+        consensus_text = f"Split Diagnostic Opinions ({consensus_count}/{total_models} Models Agree)"
+        consensus_color = "#B45309"
 
     st.markdown(
         f"""
         <div class="champion-card">
-            <div style="display:flex; justify-content:space-between; align-items:center;">
-                <span class="metric-badge">🏆 Project Champion Model: EfficientNetV2-S (93.96% Accuracy)</span>
-                <span style="color:{consensus_color}; font-weight:700; font-size:0.95rem;">{consensus_text}</span>
+            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+                <span class="metric-badge">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="#2563EB" stroke="#1D4ED8" stroke-width="1.5" style="margin-right:6px;">
+                        <circle cx="12" cy="8" r="7"/>
+                        <polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"/>
+                    </svg>
+                    Project Champion: EfficientNetV2-S (93.96% Accuracy)
+                </span>
+                <span style="color:{consensus_color}; font-weight:700; font-size:0.92rem; background:#FFFFFF; padding:0.25rem 0.65rem; border-radius:6px; border:1px solid #E2E8F0;">
+                    {consensus_text}
+                </span>
             </div>
-            <h2 style="color:#1E3A8A; margin: 0.5rem 0 0.2rem 0;">Primary Screening Diagnosis: {eff_res['pred_class']}</h2>
-            <p style="color:#1F2937; font-size:1.1rem; margin-bottom:0.5rem;">
-                Confidence: <strong>{eff_res['confidence'] * 100:.2f}%</strong>
+            <h2 style="color:#1E3A8A; margin: 0.8rem 0 0.3rem 0; font-size: 1.7rem; font-weight: 800;">Primary Screening Diagnosis: {eff_res['pred_class']}</h2>
+            <p style="color:#1E293B; font-size:1.1rem; margin-bottom:0.4rem;">
+                Confidence: <strong style="color: #2563EB;">{eff_res['confidence'] * 100:.2f}%</strong>
             </p>
-            <p style="color:#4B5563; font-size:0.9rem; margin-bottom:0;">
+            <p style="color:#475569; font-size:0.9rem; margin-bottom:0;">
                 Differential consideration: {eff_res['top3'][1][0]} ({eff_res['top3'][1][1]*100:.1f}%) | {eff_res['top3'][2][0]} ({eff_res['top3'][2][1]*100:.1f}%)
             </p>
         </div>
@@ -307,7 +407,19 @@ if run_button or "last_results" in st.session_state:
     # -------------------------------------------------------------------------
     # 2. COMPARISON TABLE & CONFIDENCE CHARTS
     # -------------------------------------------------------------------------
-    st.subheader("📊 Multi-Model Comparative Diagnostic Table")
+    st.markdown(
+        """
+        <div class="section-header">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#2563EB" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="18" y1="20" x2="18" y2="10"/>
+                <line x1="12" y1="20" x2="12" y2="4"/>
+                <line x1="6" y1="20" x2="6" y2="14"/>
+            </svg>
+            <span>Multi-Model Comparative Diagnostic Table</span>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
     table_rows = []
     for m_key, m_meta in MODEL_METRICS.items():
@@ -326,8 +438,7 @@ if run_button or "last_results" in st.session_state:
     comp_df = pd.DataFrame(table_rows)
     st.dataframe(comp_df, use_container_width=True, hide_index=True)
 
-    # Probability Distribution Expandable
-    with st.expander("📈 View Full Class Probability Distribution Across Models"):
+    with st.expander("View Full Class Probability Distribution Across Models"):
         classes_list = eff_res["classes"]
         prob_chart_data = {
             "Disease Category": classes_list,
@@ -343,7 +454,18 @@ if run_button or "last_results" in st.session_state:
     # -------------------------------------------------------------------------
     # 3. SIDE-BY-SIDE GRAD-CAM GALLERY
     # -------------------------------------------------------------------------
-    st.subheader("🔍 Explainability Gallery: Side-by-Side Grad-CAM Attribution")
+    st.markdown(
+        """
+        <div class="section-header">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#2563EB" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="11" cy="11" r="8"/>
+                <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+            </svg>
+            <span>Explainability Gallery: Side-by-Side Grad-CAM Attribution</span>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
     st.markdown(
         "Grad-CAM computes gradients with respect to the final convolutional feature representations, "
         "highlighting the physiological landmarks (cornea, lens, pupil, conjunctiva, eyelids) that drove each network's decision."
@@ -358,15 +480,26 @@ if run_button or "last_results" in st.session_state:
         with cam_cols[idx]:
             st.image(res["overlay"], use_container_width=True)
             is_champion = (m_key == "efficientnetv2_s")
-            badge = " 🏆 (Champion)" if is_champion else ""
-            st.markdown(f"**{m_meta['name']}{badge}**")
+            badge = ' <span class="champion-pill">Champion</span>' if is_champion else ""
+            st.markdown(f'<div class="model-header-tag">{m_meta["name"]}{badge}</div>', unsafe_allow_html=True)
             st.caption(
                 f"Prediction: **{res['pred_class']}**\n\n"
                 f"Confidence: **{res['confidence'] * 100:.1f}%**\n\n"
                 f"Architecture: *{m_meta['type']}*"
             )
 
-    st.caption(
-        "💡 **Interpretation Tip:** Warm red/yellow zones represent positive class evidence (high activation). "
-        "Blue/cyan regions correspond to background or features irrelevant to the predicted condition."
+    st.markdown(
+        """
+        <div class="tip-card">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#2563EB" stroke-width="2" style="flex-shrink: 0; margin-top: 1px;">
+                <circle cx="12" cy="12" r="10"/>
+                <line x1="12" y1="16" x2="12" y2="12"/>
+                <line x1="12" y1="8" x2="12.01" y2="8"/>
+            </svg>
+            <div>
+                <strong>Interpretation Guide:</strong> Warm red/yellow zones represent positive class evidence (high activation driving the prediction). Blue/cyan regions correspond to background or features irrelevant to the predicted condition.
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
     )
